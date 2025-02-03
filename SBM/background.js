@@ -1,63 +1,59 @@
 let activeTab = null;
 let startTime = null;
 let tabStartTimes = {};
+let tabTitles = {};
 
-// Send data to Native Messaging Host (Python script)
-function sendToNativeHost(data) {
-    console.log("Sending data to native host:", data);
-    chrome.runtime.sendNativeMessage("com.sbm.native_host", data, (response) => {
-        if (chrome.runtime.lastError) {
-            console.error("Native Host Error:", chrome.runtime.lastError.message);
-        } else {
-            console.log("✅ Data saved:", response);
-        }
-    });
+function sendToFlaskServer(data) {
+    fetch("http://localhost:5000/log_activity", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+    }).then(response => response.json())
+    .then(data => console.log("✅ Data saved:", data))
+    .catch(error => console.error("❌ Error sending data to Flask server:", error));
 }
 
-// Function to log exit activity
 function logExitActivity(tabId) {
     if (activeTab && startTime) {
         let exitTime = new Date();
-        let duration = (exitTime - startTime) / 1000; // Convert to seconds
+        let duration = (exitTime - startTime) / 1000;
 
         let data = {
             action: "save_activity",
             url: activeTab,
-            title: "Unknown", // Title will be updated in logEntryActivity
+            title: tabTitles[tabId] || "Unknown",
             enter_time: startTime.toISOString(),
             exit_time: exitTime.toISOString(),
             duration: duration
         };
 
-        sendToNativeHost(data);
-
+        sendToFlaskServer(data);
         console.log(`⏳ Exited: ${activeTab} at ${exitTime.toLocaleTimeString()} (Duration: ${duration}s)`);
     }
 }
 
-// Function to log entry activity
 async function logEntryActivity(tabId) {
     let tab = await chrome.tabs.get(tabId);
     if (tab.url) {
         activeTab = tab.url;
         startTime = new Date();
         tabStartTimes[tabId] = startTime;
+        tabTitles[tabId] = tab.title || "Unknown";
 
         console.log(`🌐 Entered: ${activeTab}`);
-        console.log(`📌 Title: ${tab.title}`);
+        console.log(`📌 Title: ${tabTitles[tabId]}`);
         console.log(`🕒 Time: ${startTime.toLocaleTimeString()}`);
     }
 }
 
-// Detect tab switches
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     let previousTabId = Object.keys(tabStartTimes).find(id => id !== activeInfo.tabId.toString());
-
     if (previousTabId) logExitActivity(parseInt(previousTabId));
     logEntryActivity(activeInfo.tabId);
 });
 
-// Detect navigation within the same tab
 chrome.webNavigation.onCommitted.addListener((details) => {
     if (details.frameId === 0) {
         logExitActivity(details.tabId);
@@ -65,15 +61,15 @@ chrome.webNavigation.onCommitted.addListener((details) => {
     }
 });
 
-// Detect when a tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
     logExitActivity(tabId);
     delete tabStartTimes[tabId];
+    delete tabTitles[tabId];
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.title && tabId === activeTab) {
-        activeTabTitle = changeInfo.title;
+    if (changeInfo.title) {
+        tabTitles[tabId] = changeInfo.title;
     }
 });
 
