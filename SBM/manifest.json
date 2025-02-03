@@ -1,0 +1,22 @@
+{
+    "manifest_version": 3,
+    "name": "SBM - extension",
+    "version": "1.1",
+    "description": "Logs website visit times and exits in the console",
+    "permissions": [
+        "tabs",
+        "storage",
+        "webNavigation",
+        "scripting",
+        "nativeMessaging"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icon.png"
+        }
+    }
+}
