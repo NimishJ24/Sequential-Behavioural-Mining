@@ -1,3 +1,4 @@
 .env
 venv
-SBM//native_host.py
+SBM/native_host.py
+__pycache__
