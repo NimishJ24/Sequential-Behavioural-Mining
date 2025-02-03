@@ -5,13 +5,13 @@ import time
 from pynput import keyboard, mouse
 import json
 import pygetwindow as gw
-import psutil  # For CPU and memory utilization
+import psutil  
 import threading
 
-# Define SQLite Database
+
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "activity.sqlite")
 
-# Ensure the table exists with the correct schema
+
 def create_table():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -27,7 +27,6 @@ def create_table():
     conn.commit()
     conn.close()
 
-# Call the function to create the table
 create_table()
 
 class ActivityMonitor(QThread):
@@ -42,23 +41,23 @@ class ActivityMonitor(QThread):
             on_scroll=self.on_mouse_scroll,
             on_move=self.on_mouse_move
         )
-        self.key_events = {}  # Track key press and release times
-        self.mouse_drag_start = None  # Track mouse drag start position and time
-        self.windows = {}  # Track open windows and their start times
-        self.cpu_memory_timer = None  # Timer for CPU and memory utilization
+        self.key_events = {} 
+        self.mouse_drag_start = None 
+        self.windows = {} 
+        self.cpu_memory_timer = None  
 
     def run(self):
-        self.log_open_windows()  # Log initially open windows
+        self.log_open_windows() 
         self.keyboard_listener.start()
         self.mouse_listener.start()
-        self.start_cpu_memory_monitor()  # Start CPU and memory monitoring
+        self.start_cpu_memory_monitor() 
         while self.running:
             self.log_apps()
             self.sleep(5)
 
     def log_event(self, event_type, details):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        cpu_tick = time.process_time()  # Get CPU tick
+        cpu_tick = time.process_time() 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("INSERT INTO activity (type, details, timestamp, cpu_tick) VALUES (?, ?, ?, ?)",

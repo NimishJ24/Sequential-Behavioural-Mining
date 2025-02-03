@@ -1,7 +1,6 @@
 import sqlite3
 import os
 
-# Define the SQLite database path
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "activity.sqlite")
 
 def clear_database():
@@ -12,11 +11,10 @@ def clear_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Get all table names
+
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
 
-    # Delete data from all tables
     for table in tables:
         cursor.execute(f"DELETE FROM {table[0]};")
     

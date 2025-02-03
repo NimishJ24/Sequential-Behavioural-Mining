@@ -1,0 +1,6 @@
+PyQt5
+pynput
+pygetwindow
+psutil
+qrcode
+pygetwindow
