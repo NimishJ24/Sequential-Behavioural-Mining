@@ -18,5 +18,15 @@
         "default_icon": {
             "16": "icon.png"
         }
-    }
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "sbm_host.json"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
 }

@@ -4,6 +4,7 @@ let tabStartTimes = {};
 
 // Send data to Native Messaging Host (Python script)
 function sendToNativeHost(data) {
+    console.log("Sending data to native host:", data);
     chrome.runtime.sendNativeMessage("com.sbm.native_host", data, (response) => {
         if (chrome.runtime.lastError) {
             console.error("Native Host Error:", chrome.runtime.lastError.message);
@@ -68,6 +69,12 @@ chrome.webNavigation.onCommitted.addListener((details) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
     logExitActivity(tabId);
     delete tabStartTimes[tabId];
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.title && tabId === activeTab) {
+        activeTabTitle = changeInfo.title;
+    }
 });
 
 console.log("🚀 Background script started!");

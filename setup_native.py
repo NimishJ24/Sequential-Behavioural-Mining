@@ -5,7 +5,8 @@ import platform
 
 # Define paths
 home_dir = os.path.expanduser("~")
-db_path = os.path.join(home_dir, "Documents", "tab_activity.sqlite")  # Save DB in Documents
+db_path = os.path.join(home_dir, "sbm_data", "tab_activity.sqlite")
+os.makedirs(os.path.dirname(db_path), exist_ok=True)
 native_host_json_path = ""
 native_host_script_path = os.path.join(os.getcwd(),"SBM" ,"native_host.py")  # Save native host script in current directory
 
@@ -48,6 +49,8 @@ def create_native_host_script():
 import sys
 import json
 import sqlite3
+import logging
+logging.basicConfig(filename='native_host.log', level=logging.DEBUG)
 
 DB_PATH = "{db_path}"
 
@@ -107,3 +110,27 @@ if __name__ == "__main__":
     create_native_host_script()
     create_native_host_json()
     print("🎯 Setup complete! You can now use `native_host.py`.")
+
+import shutil
+import os
+
+# Assume sbm_host.json is created in the same directory as setup_native.py
+current_dir = os.path.dirname(os.path.abspath(__file__))
+json_filename = "sbm_host.json"
+src_path = os.path.join(current_dir, json_filename)
+
+# Define the path to your extension directory.
+# For example, if your extension directory is in a subfolder named "extension" relative to this script:
+extension_dir = os.path.join(current_dir, "extension")
+
+# Alternatively, if your extension directory is the current directory itself:
+# extension_dir = current_dir
+
+# Define the destination path
+dst_path = os.path.join(extension_dir, json_filename)
+
+try:
+    shutil.copy(src_path, dst_path)
+    print(f"Successfully copied {json_filename} to {extension_dir}")
+except Exception as e:
+    print(f"Error copying file: {e}")
