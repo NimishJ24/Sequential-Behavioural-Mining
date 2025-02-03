@@ -6,10 +6,10 @@ import qrcode
 import pygetwindow as gw
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
-        QLabel, QListWidget,QStackedWidget, QMessageBox, QLineEdit, QInputDialog, QToolButton, QListWidget
-    )
+    QLabel, QListWidget, QStackedWidget, QMessageBox, QLineEdit, QInputDialog, QToolButton
+)
 from PyQt6.QtGui import QPixmap, QIcon
-from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import activity_monitor
 from file_monitor import monitor_files
 
@@ -20,21 +20,17 @@ DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "activity.sqlite")
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS activity (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT,
-            details TEXT,
-            timestamp TEXT,
-            identification TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS blocked_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT
-        )
-    """)
+    cursor.execute("""CREATE TABLE IF NOT EXISTS activity (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        type TEXT,
+                        details TEXT,
+                        timestamp TEXT,
+                        identification TEXT
+                    )""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS blocked_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT
+                    )""")
     conn.commit()
     conn.close()
 
@@ -50,12 +46,21 @@ DARK_THEME = """
     QLineEdit { background-color: #1f1f1f; border: 1px solid #333; padding: 5px; color: white; }
 """
 
+class FileMonitorThread(QThread):
+    update_signal = pyqtSignal(str)  # Signal to update the UI
+
+    def __init__(self, locked_files, verify_otp, parent=None):
+        super().__init__(parent)
+        self.locked_files = locked_files
+        self.verify_otp = verify_otp
+
+    def run(self):
+        # Monitoring files
+        monitor_files(self.locked_files, self.verify_otp, self.update_signal)
+
 class MainUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.file_monitor_thread = QThread(self)
-        self.file_monitor_thread.started.connect(self.start_file_monitor)
-        self.file_monitor_thread.start()
         self.auth_key = self.setup_google_authenticator()
         self.setWindowTitle("Activity Monitor")
         self.setGeometry(100, 100, 900, 600)
@@ -88,16 +93,13 @@ class MainUI(QMainWindow):
             "Add People": QWidget()
         }
 
-        # Inside __init__(), after defining self.pages
         self.blocked_list = QListWidget()
-        # self.blocked_list.setSelectionMode(QListWidget.setSelectionMode)
-        
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM blocked_items")
         for row in cursor.fetchall():
             self.blocked_list.addItem(row[0])
-            conn.close()
+        conn.close()
 
         self.browse_button = QToolButton()
         self.browse_button.setIcon(QIcon("icons/folder.png"))  # Use a folder icon
@@ -108,7 +110,7 @@ class MainUI(QMainWindow):
         blocked_layout.addWidget(self.browse_button, alignment=Qt.AlignmentFlag.AlignRight)
         blocked_layout.addWidget(self.blocked_list)
         self.pages["Blocked Setting"].setLayout(blocked_layout)
-        
+
         self.locked_files = self.get_blocked_items()
 
         for page_name, page_widget in self.pages.items():
@@ -130,27 +132,32 @@ class MainUI(QMainWindow):
         self.monitor_thread.log_signal.connect(self.update_notifications)
         self.monitor_thread.start()
 
+        # File monitor thread
+        self.file_monitor_thread = FileMonitorThread(self.locked_files, self.verify_otp)
+        self.file_monitor_thread.update_signal.connect(self.update_notifications)
+        self.file_monitor_thread.start()
+
+        # Correct the call to monitor_files with update_signal:
+        # self.file_monitor_thread = FileMonitorThread(self.locked_files, self.verify_otp)
+        # self.file_monitor_thread.update_signal.connect(self.update_notifications)
+        # monitor_files(self.locked_files, self.verify_otp, self.update_notifications)
+
+        # Connect double-click event to handle file removal
+        self.blocked_list.itemDoubleClicked.connect(self.remove_blocked_item_on_double_click)
+
     def setup_google_authenticator(self):
         key_path = os.path.join(os.path.expanduser("~"), "Documents", "auth_key.txt")
-
-        # If already set up, return existing key
         if os.path.exists(key_path):
             with open(key_path, "r") as f:
                 return f.read().strip()
 
-        # Generate new key
         new_key = pyotp.random_base32()
-
-        # Generate QR Code URI
         app_name = "MySecurityApp"
         issuer = "Tarush"
         totp_uri = pyotp.TOTP(new_key).provisioning_uri(name=app_name, issuer_name=issuer)
 
-        # Generate and Display QR Code
         qr = qrcode.make(totp_uri)
         qr_pixmap = QPixmap.fromImage(qr.toqimage())
-
-        # Show the QR Code in a pop-up
         qr_label = QLabel()
         qr_label.setPixmap(qr_pixmap)
         qr_label.setScaledContents(True)
@@ -160,30 +167,27 @@ class MainUI(QMainWindow):
         qr_dialog.setText("Scan this QR code in Google Authenticator.")
         qr_dialog.setIconPixmap(qr_pixmap)
         
-        retry = True  # Control retry loop
+        retry = True
         while retry:
-            qr_dialog.exec()  # Show QR code popup
+            qr_dialog.exec()
 
-            # Ask user to enter OTP
             totp = pyotp.TOTP(new_key)
             otp, ok = QInputDialog.getText(self, "Google Authenticator", "Enter OTP:", QLineEdit.EchoMode.Password)
 
-            if not ok:  # User clicked "Cancel"
+            if not ok:
                 QMessageBox.warning(self, "Setup Canceled", "Google Auth setup was canceled. Exiting...")
-                sys.exit(0)  # Properly exit the application
+                sys.exit(0)
 
-            if totp.verify(otp):  # Valid OTP
+            if totp.verify(otp):
                 with open(key_path, "w") as f:
                     f.write(new_key)
                 return new_key
             else:
-                retry = QMessageBox.question(
-                    self, "Invalid OTP", "The OTP is incorrect. Try again?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                ) == QMessageBox.StandardButton.Yes
-    
+                retry = QMessageBox.question(self, "Invalid OTP", "The OTP is incorrect. Try again?", 
+                                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+
     def start_file_monitor(self):
-        monitor_files(self.locked_files, self.verify_otp)
+        self.file_monitor_thread.start()
     
     def change_page(self):
         button = self.sender()
@@ -202,17 +206,17 @@ class MainUI(QMainWindow):
             # Ensure files in the blocked list require OTP verification to be removed
             blocked_items = self.get_blocked_items()  # Fetch list of locked files from the database
             
-            if blocked_items:  # If there are any blocked items
-                item_to_remove = QInputDialog.getItem(self, "Remove Blocked File", 
-                                                    "Select a file to remove:", 
-                                                    blocked_items, editable=False)
-                if item_to_remove:
-                    # Ask for OTP before removing the file
-                    if not self.verify_authenticator():
-                        QMessageBox.warning(self, "Access Denied", "Invalid OTP. Unable to remove file.")
-                        return
-                    self.remove_blocked_item(item_to_remove)
-                    QMessageBox.information(self, "File Removed", f"{item_to_remove} has been successfully removed.")
+            # if blocked_items:  # If there are any blocked items
+                # item_to_remove = QInputDialog.getItem(self, "Remove Blocked File", 
+                #                                     "Select a file to remove:", 
+                #                                     blocked_items, editable=False)
+                # if item_to_remove:
+                #     # Ask for OTP before removing the file
+                #     if not self.verify_authenticator():
+                #         QMessageBox.warning(self, "Access Denied", "Invalid OTP. Unable to remove file.")
+                #         return
+                #     self.remove_blocked_item(item_to_remove)
+                #     QMessageBox.information(self, "File Removed", f"{item_to_remove} has been successfully removed.")
 
         self.stack.setCurrentWidget(self.pages[page_name])
 
@@ -235,15 +239,32 @@ class MainUI(QMainWindow):
         qr_label.setScaledContents(True)
         qr_label.setGeometry(100, 100, 250, 250)  # Adjust position and size
         qr_label.show()
-    
+
     def update_notifications(self, message):
         self.notification_panel.addItem(message)
+
+    def remove_blocked_item_on_double_click(self, item):
+        file_path = item.text()
+        
+        # Ask for OTP verification
+        if self.verify_authenticator():
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM blocked_items WHERE name = ?", (file_path,))
+            conn.commit()
+            conn.close()
+
+            # Remove the item from the list
+            self.blocked_list.takeItem(self.blocked_list.row(item))
+            QMessageBox.information(self, "Unlocked", f"{file_path} has been unlocked.")
+        else:
+            QMessageBox.warning(self, "Access Denied", "Incorrect OTP. File not unlocked.")
 
     def browse_and_lock(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select File to Lock")
 
         if file_path:
-            if self.verify_authenticator():  # Authenticate before locking
+            if self.verify_authenticator():
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
                 cursor.execute("INSERT INTO blocked_items (name) VALUES (?)", (file_path,))
@@ -254,23 +275,6 @@ class MainUI(QMainWindow):
             else:
                 QMessageBox.warning(self, "Access Denied", "Incorrect OTP. File not locked.")
 
-    def unlock_file(self):
-        selected_item = self.blocked_list.currentItem()
-        if selected_item:
-            file_path = selected_item.text()
-            
-            if self.verify_authenticator():  # Authenticate before unlocking
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM blocked_items WHERE name = ?", (file_path,))
-                conn.commit()
-                conn.close()
-
-                self.blocked_list.takeItem(self.blocked_list.row(selected_item))
-                QMessageBox.information(self, "Unlocked", f"{file_path} has been unlocked.")
-            else:
-                QMessageBox.warning(self, "Access Denied", "Incorrect OTP. File not unlocked.")
-
     def get_blocked_items(self):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -279,21 +283,10 @@ class MainUI(QMainWindow):
         conn.close()
         return blocked_items
 
-    def remove_blocked_item(self, item_name):
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM blocked_items WHERE name = ?", (item_name,))
-        conn.commit()
-        conn.close()
-
-    def closeEvent(self, event):
-        # Ensure that the file monitoring thread stops when the UI is closed
-        self.file_monitor_thread.quit()
-        self.file_monitor_thread.wait()
-        event.accept()
-
     def closeEvent(self, event):
         self.monitor_thread.stop()
+        self.file_monitor_thread.quit()
+        self.file_monitor_thread.wait()
         event.accept()
 
 if __name__ == "__main__":
