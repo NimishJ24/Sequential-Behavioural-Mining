@@ -3,301 +3,450 @@ import os
 import sqlite3
 import pyotp
 import qrcode
-import pygetwindow as gw
+from datetime import datetime
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
-        QLabel, QListWidget,QStackedWidget, QMessageBox, QLineEdit, QInputDialog, QToolButton, QListWidget
-    )
-from PyQt6.QtGui import QPixmap, QIcon
-from PyQt6.QtCore import Qt, QThread
+    QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout,
+    QFileDialog, QLabel, QListWidget, QStackedWidget, QMessageBox, QLineEdit,
+    QInputDialog, QToolButton, QTableWidget, QTableWidgetItem, QHeaderView,
+    QGridLayout, QSizePolicy
+)
+from PyQt6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF, QSize
+from PyQt6.QtCharts import QChart, QChartView, QPieSeries, QLineSeries, QDateTimeAxis, QValueAxis
 import activity_monitor
-from file_monitor import monitor_files
+from file_monitor import FileMonitorThread
 
-# Define SQLite Database
+# Database Path
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "activity.sqlite")
 
-# Ensure database exists
+# Initialize Database
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS activity (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT,
-            details TEXT,
-            timestamp TEXT,
-            identification TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS blocked_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT
-        )
-    """)
+    cursor.execute("""CREATE TABLE IF NOT EXISTS blocked_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT
+                    )""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS activity (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        type TEXT,
+                        details TEXT,
+                        timestamp DATETIME,
+                        cpu_tick REAL
+                    )""")
     conn.commit()
     conn.close()
 
 init_db()
 
-# Dark Theme Stylesheet
+# Modern Dark Theme
 DARK_THEME = """
-    QWidget { background-color: #121212; color: #ffffff; font-size: 14px; }
-    QPushButton { background-color: #1f1f1f; border: 1px solid #333; padding: 8px; border-radius: 5px; }
-    QPushButton:hover { background-color: #333333; }
-    QListWidget { background-color: #1f1f1f; border: 1px solid #333; }
-    QLabel { font-size: 16px; }
-    QLineEdit { background-color: #1f1f1f; border: 1px solid #333; padding: 5px; color: white; }
+    QWidget {
+        background-color: #121212;
+        color: #FFFFFF;
+        font-family: 'Segoe UI';
+    }
+    QPushButton {
+        background-color: #1F1F1F;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 14px;
+        min-width: 120px;
+    }
+    QPushButton:hover {
+        background-color: #2D2D2D;
+    }
+    QPushButton:pressed {
+        background-color: #3D3D3D;
+    }
+    QListWidget {
+        background-color: #1F1F1F;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 8px;
+    }
+    QTableWidget {
+        background-color: #1F1F1F;
+        border: 1px solid #333;
+        border-radius: 8px;
+        gridline-color: #333;
+    }
+    QHeaderView::section {
+        background-color: #2D2D2D;
+        padding: 8px;
+        border: none;
+    }
+    QToolButton {
+        background-color: #6200EE;
+        border-radius: 24px;
+        padding: 16px;
+        color: white;
+        font-weight: bold;
+    }
+    QToolButton:hover {
+        background-color: #7C4DFF;
+    }
+    .Card {
+        background-color: #1F1F1F;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .StatLabel {
+        font-size: 16px;
+        color: #888;
+    }
+    .StatValue {
+        font-size: 32px;
+        font-weight: bold;
+        color: #6200EE;
+    }
+    QChartView {
+        background-color: #1F1F1F;
+        border-radius: 12px;
+    }
 """
 
 class MainUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.file_monitor_thread = QThread(self)
-        self.file_monitor_thread.started.connect(self.start_file_monitor)
-        self.file_monitor_thread.start()
         self.auth_key = self.setup_google_authenticator()
-        self.setWindowTitle("Activity Monitor")
-        self.setGeometry(100, 100, 900, 600)
-
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-
-        self.main_layout = QHBoxLayout(self.central_widget)
-    
-        # Left Navbar
-        self.navbar = QVBoxLayout()
-        self.nav_buttons = {
-            "Home": QPushButton("Home"),
-            "History Log": QPushButton("History Log"),
-            "Blocked Setting": QPushButton("Blocked Setting"),
-            "Report": QPushButton("Report"),
-            "Add People": QPushButton("Add People")
-        }
-        for btn in self.nav_buttons.values():
-            btn.clicked.connect(self.change_page)
-            self.navbar.addWidget(btn)
-
-        # Center Stack Widget
-        self.stack = QStackedWidget()
-        self.pages = {
-            "Home": QWidget(),
-            "History Log": QWidget(),
-            "Blocked Setting": QWidget(),
-            "Report": QWidget(),
-            "Add People": QWidget()
-        }
-
-        # Inside __init__(), after defining self.pages
-        self.blocked_list = QListWidget()
-        # self.blocked_list.setSelectionMode(QListWidget.setSelectionMode)
         
+        self.nav_buttons = {}
+        self.locked_files = self.get_blocked_items()
+        self.setup_ui()
+        
+        self.setup_monitoring()
+        self.load_initial_data()
+        
+    def get_blocked_items(self):
+        """Get blocked items from database (without UI interaction)"""
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM blocked_items")
-        for row in cursor.fetchall():
-            self.blocked_list.addItem(row[0])
-            conn.close()
+        locked_files = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return locked_files
 
-        self.browse_button = QToolButton()
-        self.browse_button.setIcon(QIcon("icons/folder.png"))  # Use a folder icon
-        self.browse_button.setToolTip("Browse and lock files/folders")
-        self.browse_button.clicked.connect(self.browse_and_lock)
+    def setup_ui(self):
+        self.setWindowTitle("Activity Monitor")
+        self.setGeometry(100, 100, 1280, 720)
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_layout.setSpacing(20)
 
-        blocked_layout = QVBoxLayout()
-        blocked_layout.addWidget(self.browse_button, alignment=Qt.AlignmentFlag.AlignRight)
-        blocked_layout.addWidget(self.blocked_list)
-        self.pages["Blocked Setting"].setLayout(blocked_layout)
-        
-        self.locked_files = self.get_blocked_items()
-
-        for page_name, page_widget in self.pages.items():
-            self.stack.addWidget(page_widget)
-
-        # Right Panel (Notification Log)
-        self.notification_panel = QListWidget()
-
-        # Layouts
-        self.main_layout.addLayout(self.navbar, 1)
-        self.main_layout.addWidget(self.stack, 4)
-        self.main_layout.addWidget(self.notification_panel, 2)
-
-        # Apply Dark Theme
+        self.setup_navigation()
+        self.setup_stack_widget()
+        self.setup_notifications()
         self.setStyleSheet(DARK_THEME)
 
-        # Start Background Monitoring
+    def setup_navigation(self):
+        nav_widget = QWidget()
+        nav_widget.setFixedWidth(100)
+        nav_layout = QVBoxLayout(nav_widget)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(10)
+
+        buttons = [
+            ("Home", "icons/home.png"),
+            ("History", "icons/history.png"),
+            ("Blocked", "icons/blocked.png")
+        ]
+
+        for text, icon in buttons:
+            btn = QToolButton()
+            btn.setText(text)
+            btn.setIcon(QIcon(icon))
+            btn.setIconSize(QSize(24, 24))
+            btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            btn.setCheckable(True)
+            btn.setFixedSize(80, 80)
+            btn.clicked.connect(self.change_page)
+            nav_layout.addWidget(btn)
+            self.nav_buttons[text] = btn
+
+        nav_layout.addStretch()
+        self.main_layout.addWidget(nav_widget)
+
+    def setup_stack_widget(self):
+        self.stack = QStackedWidget()
+        self.setup_home_page()
+        self.setup_history_page()
+        self.setup_blocked_page()
+        self.main_layout.addWidget(self.stack, 3)
+
+    def setup_home_page(self):
+        home_page = QWidget()
+        layout = QVBoxLayout(home_page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(20)
+
+        # Stats Cards
+        stats_layout = QGridLayout()
+        self.screen_time_card = self.create_stat_card("Screen Time", "0h 0m")
+        self.activities_card = self.create_stat_card("Activities", "0")
+        self.blocked_card = self.create_stat_card("Blocked Items", str(len(self.locked_files)))
+        
+        stats_layout.addWidget(self.screen_time_card, 0, 0)
+        stats_layout.addWidget(self.activities_card, 0, 1)
+        stats_layout.addWidget(self.blocked_card, 0, 2)
+
+        # Charts
+        self.timeline_chart = QChartView()
+        self.timeline_chart.setMinimumHeight(300)
+        self.distribution_chart = QChartView()
+        self.distribution_chart.setMinimumHeight(300)
+
+        layout.addLayout(stats_layout)
+        layout.addWidget(self.timeline_chart)
+        layout.addWidget(self.distribution_chart)
+        self.stack.addWidget(home_page)
+
+    def setup_history_page(self):
+        history_page = QWidget()
+        layout = QVBoxLayout(history_page)
+        self.history_table = QTableWidget()
+        self.history_table.setColumnCount(4)
+        self.history_table.setHorizontalHeaderLabels(["Type", "Details", "Timestamp", "CPU Tick"])
+        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.history_table.verticalHeader().hide()
+        self.history_table.setAlternatingRowColors(True)
+        
+        layout.addWidget(self.history_table)
+        self.stack.addWidget(history_page)
+
+    def setup_blocked_page(self):
+        blocked_page = QWidget()
+        layout = QVBoxLayout(blocked_page)
+        layout.setSpacing(15)
+        
+        # Initialize blocked_list here
+        self.blocked_list = QListWidget()  # Add this line
+        self.blocked_list.itemDoubleClicked.connect(self.remove_blocked_item)
+        
+        add_btn = QToolButton()
+        add_btn.setText("Add Item")
+        add_btn.setIcon(QIcon("icons/add.png"))
+        add_btn.clicked.connect(self.browse_and_lock)
+        
+        layout.addWidget(add_btn)
+        layout.addWidget(self.blocked_list)
+        self.stack.addWidget(blocked_page)
+
+    def setup_notifications(self):
+        sidebar = QWidget()
+        sidebar.setFixedWidth(300)
+        layout = QVBoxLayout(sidebar)
+        title = QLabel("Notifications")
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        
+        self.notification_panel = QListWidget()
+        self.notification_panel.setStyleSheet("""
+            QListWidget::item {
+                padding: 12px;
+                border-radius: 8px;
+                margin: 4px;
+                background-color: #1F1F1F;
+            }
+        """)
+        
+        layout.addWidget(title)
+        layout.addWidget(self.notification_panel)
+        self.main_layout.addWidget(sidebar)
+
+    def create_stat_card(self, title, value):
+        card = QWidget()
+        card.setStyleSheet(".Card {background-color: #1F1F1F; border-radius: 12px;}")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        label = QLabel(title)
+        label.setStyleSheet(".StatLabel {font-size: 16px; color: #888;}")
+        value_label = QLabel(value)
+        value_label.setStyleSheet(".StatValue {font-size: 32px; font-weight: bold; color: #6200EE;}")
+        
+        layout.addWidget(label)
+        layout.addWidget(value_label)
+        return card
+
+    def update_charts(self):
+        # Timeline Chart
+        timeline_series = QLineSeries()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT timestamp, cpu_tick FROM activity ORDER BY timestamp")
+        
+        total_duration = 0
+        prev_time = None
+        for ts, tick in cursor.fetchall():
+            current_time = datetime.fromisoformat(ts)
+            int(current_time.timestamp() * 1000)
+            if prev_time:
+                total_duration += (current_time - prev_time).total_seconds()
+            prev_time = current_time
+            timeline_series.append(current_time.timestamp() * 1000, float(tick))
+        
+        # Update screen time
+        hours = int(total_duration // 3600)
+        minutes = int((total_duration % 3600) // 60)
+        self.screen_time_card.layout().itemAt(1).widget().setText(f"{hours}h {minutes}m")
+        
+        timeline_chart = QChart()
+        timeline_chart.addSeries(timeline_series)
+        timeline_chart.setTitle("Activity Timeline")
+        timeline_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
+        
+        axis_x = QDateTimeAxis()
+        axis_x.setFormat("hh:mm")
+        axis_y = QValueAxis()
+        timeline_chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
+        timeline_chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
+        timeline_series.attachAxis(axis_x)
+        timeline_series.attachAxis(axis_y)
+        self.timeline_chart.setChart(timeline_chart)
+
+        # Distribution Chart
+        pie_series = QPieSeries()
+        cursor.execute("SELECT type, COUNT(*) FROM activity GROUP BY type")
+        total_activities = 0
+        for activity_type, count in cursor.fetchall():
+            pie_series.append(f"{activity_type} ({count})", count)
+            total_activities += count
+        
+        self.activities_card.layout().itemAt(1).widget().setText(str(total_activities))
+        
+        distribution_chart = QChart()
+        distribution_chart.addSeries(pie_series)
+        distribution_chart.setTitle("Activity Distribution")
+        distribution_chart.setAnimationOptions(QChart.AnimationOption.AllAnimations)
+        self.distribution_chart.setChart(distribution_chart)
+        
+        conn.close()
+
+    def load_initial_data(self):
+        self.load_blocked_items()
+        self.load_history_data()
+        self.update_charts()
+
+    def load_blocked_items(self):
+        """Load items into the UI list"""
+        if hasattr(self, 'blocked_list'):  # Safety check
+            self.blocked_list.clear()
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM blocked_items")
+            self.blocked_list.addItems([row[0] for row in cursor.fetchall()])
+            conn.close()
+            self.blocked_card.layout().itemAt(1).widget().setText(str(self.blocked_list.count()))
+    
+    def load_history_data(self):
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT type, details, timestamp, cpu_tick FROM activity ORDER BY timestamp DESC")
+        rows = cursor.fetchall()
+        self.history_table.setRowCount(len(rows))
+        
+        for row_idx, row in enumerate(rows):
+            for col_idx, item in enumerate(row):
+                self.history_table.setItem(row_idx, col_idx, QTableWidgetItem(str(item)))
+        conn.close()
+
+    def change_page(self):
+        btn = self.sender()
+        page_name = btn.text()
+        
+        for button in self.nav_buttons.values():
+            button.setChecked(False)
+        btn.setChecked(True)
+        
+        if page_name == "Home":
+            self.update_charts()
+        elif page_name == "History":
+            if not self.verify_authenticator():
+                QMessageBox.warning(self, "Access Denied", "Invalid OTP!")
+                return
+            self.load_history_data()
+        
+        self.stack.setCurrentIndex(list(self.nav_buttons.keys()).index(page_name))
+
+    def setup_monitoring(self):
         self.monitor_thread = activity_monitor.ActivityMonitor()
         self.monitor_thread.log_signal.connect(self.update_notifications)
         self.monitor_thread.start()
+        
+        self.file_monitor_thread = FileMonitorThread(self.locked_files, self.verify_authenticator)
+        self.file_monitor_thread.update_signal.connect(self.update_notifications)
+        self.file_monitor_thread.start()
+
+    def update_notifications(self, message):
+        self.notification_panel.insertItem(0, message)
+        self.update_charts()
+        self.load_blocked_items()
 
     def setup_google_authenticator(self):
         key_path = os.path.join(os.path.expanduser("~"), "Documents", "auth_key.txt")
-
-        # If already set up, return existing key
         if os.path.exists(key_path):
             with open(key_path, "r") as f:
                 return f.read().strip()
 
-        # Generate new key
         new_key = pyotp.random_base32()
-
-        # Generate QR Code URI
-        app_name = "MySecurityApp"
-        issuer = "Tarush"
-        totp_uri = pyotp.TOTP(new_key).provisioning_uri(name=app_name, issuer_name=issuer)
-
-        # Generate and Display QR Code
-        qr = qrcode.make(totp_uri)
-        qr_pixmap = QPixmap.fromImage(qr.toqimage())
-
-        # Show the QR Code in a pop-up
-        qr_label = QLabel()
-        qr_label.setPixmap(qr_pixmap)
-        qr_label.setScaledContents(True)
-
-        qr_dialog = QMessageBox(self)
-        qr_dialog.setWindowTitle("Scan QR Code")
-        qr_dialog.setText("Scan this QR code in Google Authenticator.")
-        qr_dialog.setIconPixmap(qr_pixmap)
+        totp_uri = pyotp.TOTP(new_key).provisioning_uri(name="ActivityMonitor", issuer_name="SecureApp")
         
-        retry = True  # Control retry loop
-        while retry:
-            qr_dialog.exec()  # Show QR code popup
-
-            # Ask user to enter OTP
-            totp = pyotp.TOTP(new_key)
-            otp, ok = QInputDialog.getText(self, "Google Authenticator", "Enter OTP:", QLineEdit.EchoMode.Password)
-
-            if not ok:  # User clicked "Cancel"
-                QMessageBox.warning(self, "Setup Canceled", "Google Auth setup was canceled. Exiting...")
-                sys.exit(0)  # Properly exit the application
-
-            if totp.verify(otp):  # Valid OTP
+        qr = qrcode.make(totp_uri)
+        qr_label = QLabel()
+        qr_label.setPixmap(QPixmap.fromImage(qr.toqimage()))
+        
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Scan QR Code")
+        msg_box.setText("Scan with Google Authenticator:")
+        msg_box.setIconPixmap(qr_label.pixmap())
+        msg_box.exec()
+        
+        while True:
+            otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:")
+            if not ok:
+                sys.exit()
+            if pyotp.TOTP(new_key).verify(otp):
                 with open(key_path, "w") as f:
                     f.write(new_key)
                 return new_key
-            else:
-                retry = QMessageBox.question(
-                    self, "Invalid OTP", "The OTP is incorrect. Try again?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                ) == QMessageBox.StandardButton.Yes
-    
-    def start_file_monitor(self):
-        monitor_files(self.locked_files, self.verify_otp)
-    
-    def change_page(self):
-        button = self.sender()
-        page_name = button.text()
+            QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
-        if page_name == "History Log":
-            if not self.verify_authenticator():
-                QMessageBox.warning(self, "Access Denied", "Invalid OTP. Access denied!")
-                return
-
-        elif page_name == "Add People":
-            new_auth_key = self.setup_google_authenticator()
-            QMessageBox.information(self, "User Added", "New user setup complete!")
-
-        elif page_name == "Blocked Setting":
-            # Ensure files in the blocked list require OTP verification to be removed
-            blocked_items = self.get_blocked_items()  # Fetch list of locked files from the database
-            
-            if blocked_items:  # If there are any blocked items
-                item_to_remove = QInputDialog.getItem(self, "Remove Blocked File", 
-                                                    "Select a file to remove:", 
-                                                    blocked_items, editable=False)
-                if item_to_remove:
-                    # Ask for OTP before removing the file
-                    if not self.verify_authenticator():
-                        QMessageBox.warning(self, "Access Denied", "Invalid OTP. Unable to remove file.")
-                        return
-                    self.remove_blocked_item(item_to_remove)
-                    QMessageBox.information(self, "File Removed", f"{item_to_remove} has been successfully removed.")
-
-        self.stack.setCurrentWidget(self.pages[page_name])
-
-    def verify_otp(self, auth_key):
-        otp, ok = QInputDialog.getText(self, "Google Authenticator", "Enter OTP:", QLineEdit.EchoMode.Password)
-        if not ok:
-            return False
-        totp = pyotp.TOTP(auth_key)
-        return totp.verify(otp)
-    
     def verify_authenticator(self):
         totp = pyotp.TOTP(self.auth_key)
-        otp, ok = QInputDialog.getText(self, "Google Authenticator", "Enter OTP:", QLineEdit.EchoMode.Password)
+        otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)
         return ok and totp.verify(otp)
 
-    def show_qr_code(self, qr_path):
-        qr_label = QLabel(self)
-        pixmap = QPixmap(qr_path)
-        qr_label.setPixmap(pixmap)
-        qr_label.setScaledContents(True)
-        qr_label.setGeometry(100, 100, 250, 250)  # Adjust position and size
-        qr_label.show()
-    
-    def update_notifications(self, message):
-        self.notification_panel.addItem(message)
-
     def browse_and_lock(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select File to Lock")
+        path, _ = QFileDialog.getOpenFileName(self, "Select File to Lock")
+        if path and self.verify_authenticator():
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO blocked_items (name) VALUES (?)", (path,))
+            conn.commit()
+            conn.close()
+            self.update_notifications(f"File locked: {path}")
+            self.file_monitor_thread.monitor.restrict_access(path)
 
-        if file_path:
-            if self.verify_authenticator():  # Authenticate before locking
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO blocked_items (name) VALUES (?)", (file_path,))
-                conn.commit()
-                conn.close()
-
-                self.blocked_list.addItem(file_path)
-            else:
-                QMessageBox.warning(self, "Access Denied", "Incorrect OTP. File not locked.")
-
-    def unlock_file(self):
-        selected_item = self.blocked_list.currentItem()
-        if selected_item:
-            file_path = selected_item.text()
-            
-            if self.verify_authenticator():  # Authenticate before unlocking
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM blocked_items WHERE name = ?", (file_path,))
-                conn.commit()
-                conn.close()
-
-                self.blocked_list.takeItem(self.blocked_list.row(selected_item))
-                QMessageBox.information(self, "Unlocked", f"{file_path} has been unlocked.")
-            else:
-                QMessageBox.warning(self, "Access Denied", "Incorrect OTP. File not unlocked.")
-
-    def get_blocked_items(self):
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM blocked_items")
-        blocked_items = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return blocked_items
-
-    def remove_blocked_item(self, item_name):
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM blocked_items WHERE name = ?", (item_name,))
-        conn.commit()
-        conn.close()
-
-    def closeEvent(self, event):
-        # Ensure that the file monitoring thread stops when the UI is closed
-        self.file_monitor_thread.quit()
-        self.file_monitor_thread.wait()
-        event.accept()
+    def remove_blocked_item(self, item):
+        if self.verify_authenticator():
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM blocked_items WHERE name = ?", (item.text(),))
+            conn.commit()
+            conn.close()
+            self.update_notifications(f"File unlocked: {item.text()}")
+            self.file_monitor_thread.monitor.allow_access(item.text())
 
     def closeEvent(self, event):
         self.monitor_thread.stop()
+        self.file_monitor_thread.stop()
         event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    main_window = MainUI()
-    main_window.show()
+    window = MainUI()
+    window.show()
     sys.exit(app.exec())
