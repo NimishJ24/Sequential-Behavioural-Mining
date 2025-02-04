@@ -1,0 +1,56 @@
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.175.231:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:07] "OPTIONS /log_activity HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:07] "OPTIONS /log_activity HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:17] "[31m[1mGET /log_activity HTTP/1.1[0m" 405 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:17] "OPTIONS /log_activity HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:17] "OPTIONS /log_activity HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:17] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:29:21] "OPTIONS /log_activity HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.175.231:5001
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:33:53] "[33mGET / HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 04:33:53] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-02-04 04:59:44,675 - INFO - Database initialized at /home/chandan/Documents/Sequential-Behavioural-Mining/SBM/tab_activity.sqlite
+2025-02-04 05:00:06,850 - INFO - Database initialized at /home/chandan/Documents/Sequential-Behavioural-Mining/SBM/tab_activity.sqlite
+2025-02-04 05:00:06,855 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5003
+ * Running on http://192.168.175.231:5003
+2025-02-04 05:00:06,855 - INFO - [33mPress CTRL+C to quit[0m
+2025-02-04 05:01:59,701 - INFO - 127.0.0.1 - - [04/Feb/2025 05:01:59] "[31m[1mGET /log_activity HTTP/1.1[0m" 405 -
+2025-02-04 05:01:59,735 - INFO - 127.0.0.1 - - [04/Feb/2025 05:01:59] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-02-04 05:07:20,224 - INFO - Database initialized at /home/chandan/Documents/Sequential-Behavioural-Mining/SBM/tab_activity.sqlite
+2025-02-04 05:07:20,230 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5003
+ * Running on http://192.168.175.231:5003
+2025-02-04 05:07:20,230 - INFO - [33mPress CTRL+C to quit[0m
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.175.231:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.175.231:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+ERROR:root:Error logging activity: table activity has no column named action
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 05:16:04] "[35m[1mPOST /log_activity HTTP/1.1[0m" 500 -
+ERROR:root:Error logging activity: table activity has no column named action
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 05:16:04] "[35m[1mPOST /log_activity HTTP/1.1[0m" 500 -
+ERROR:root:Error logging activity: table activity has no column named action
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 05:16:09] "[35m[1mPOST /log_activity HTTP/1.1[0m" 500 -
+ERROR:root:Error logging activity: table activity has no column named action
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 05:16:15] "[35m[1mPOST /log_activity HTTP/1.1[0m" 500 -
+ERROR:root:Error logging activity: table activity has no column named action
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 05:16:17] "[35m[1mPOST /log_activity HTTP/1.1[0m" 500 -
+ERROR:root:Error logging activity: table activity has no column named action
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 05:16:17] "[35m[1mPOST /log_activity HTTP/1.1[0m" 500 -

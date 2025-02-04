@@ -1,0 +1,4 @@
+flask
+flask_cors
+sqlite3
+requests
