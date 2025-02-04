@@ -396,7 +396,7 @@ class ActivityMonitor(QThread):
         conn_dest.close()
         
         self.first10_copied = True
-        model.IDS.train()
+        model.IntrusionDetector.train()
         self.log_signal.emit("First 10 minutes data copied to soft_training.sqlite.")
     
     def cleanup_old_data(self):
@@ -446,10 +446,8 @@ class ActivityMonitor(QThread):
         rows = cursor.fetchall()
         conn.close()
 
-        # Filter out rows where the event type is NULL.
         filtered = [row for row in rows if row[0] is not None]
 
-        # Deduplicate repeated events (a simple approach: remove consecutive events that have the same type and title)
         deduped = []
         prev = None
         for row in filtered:
@@ -457,16 +455,13 @@ class ActivityMonitor(QThread):
                 deduped.append(row)
                 prev = row
 
-        # Prepare the summary text. (This string would be sent to your Ollama model.)
         summary_lines = [f"{event_type} at {timestamp}" for event_type, title, timestamp in deduped]
         summary_text = "\n".join(summary_lines)
         
-        # For this example, we just log the summary.
-        model_result = bool(model.IDS.test(model.IDS))
+        model_result = bool(model.IntrusionDetector.test(model.IntrusionDetector))
         result = self.call_ollama_model(summary_text, model_result)
         output_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(result + " \n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
-        # Insert the result into the output_summary table in output.sqlite
         conn_output = sqlite3.connect(OUTPUT_DB_PATH)
         cursor_output = conn_output.cursor()
         cursor_output.execute("""
@@ -480,20 +475,12 @@ class ActivityMonitor(QThread):
         self.log_signal.emit(f"Ollama summary: {result}")
     
     def periodic_maintenance(self):
-        """
-        Runs every minute. It:
-        - Calls cleanup_old_data() to remove data older than 15 minutes.
-        - Checks if the first 10 minutes have passed to call copy_first_10_minutes().
-        """
         while self.running:
             self.copy_first_10_minutes()
             self.cleanup_old_data()
             time.sleep(60)
 
     def periodic_summary_generation(self):
-        """
-        Runs every minute to generate summary data from the past minute.
-        """
         while self.running:
             self.generate_summary_data()
             time.sleep(60)

@@ -365,27 +365,16 @@ class MainUI(QMainWindow):
         
         timeline_chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
         
-        # Attach axes to the series.
         usage_series.attachAxis(axis_x)
         usage_series.attachAxis(axis_y)
-        
-        # Optionally, add some margins for a cleaner look.
         timeline_chart.setMargins(QMargins(10, 10, 10, 10))
-
-        
-        # Assuming self.timeline_chart is a QChartView, enable antialiasing for smoother edges.
         self.timeline_chart.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        # Apply a stylesheet to the QChartView to create rounded corners and a modern border.
-        # (Note: This stylesheet applies to the QChartView widget, not the QChart inside it.)
         self.timeline_chart.setStyleSheet("""
             QChartView {
                 border-radius: 15px;
                 background-color: #1e1e1e;
             }
         """)
-        
-        # Finally, update the chart view with the new chart.
         self.timeline_chart.setChart(timeline_chart)
         
         
@@ -411,27 +400,22 @@ class MainUI(QMainWindow):
         Clear the scroll area and load all records from the output.sqlite database.
         Each record is shown as a custom widget with a maximum height.
         """
-        # Clear existing widgets from the scroll layout.
         while self.history_scroll_layout.count():
             child = self.history_scroll_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
-
-        # Open the output.sqlite database and fetch the records.
         conn = sqlite3.connect(OUTPUT_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT description, model_output, timestamp FROM output_summary")
         rows = cursor.fetchall()
         conn.close()
-
-        # Create a custom widget for each record.
         for description, model_output, timestamp in rows:
             widget = QWidget()
             widget.setMaximumHeight(150)  # Limit the widget height.
             widget.setMaximumWidth(750)
             widget_layout = QVBoxLayout(widget)
-            widget_layout.setContentsMargins(15, 10, 15, 10)
-            widget_layout.setSpacing(8)  # Add spacing between elements.
+            widget_layout.setContentsMargins(15, 5, 15, 5)
+            widget_layout.setSpacing(2)  # Add spacing between elements.
 
             # Use a different background color based on model_output.
             widget.setStyleSheet(f"""
@@ -543,8 +527,8 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
-        print(model.IDS.test(model.IDS))
-        if(model.IDS.test(model.IDS)):
+        print(model.IntrusionDetector.test(model.IntrusionDetector))
+        if(model.IntrusionDetector.test(model.IntrusionDetector)):
             return True
         else:
             # insert popup ?

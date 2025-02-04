@@ -19,7 +19,6 @@ function sendToFlaskServer(data) {
     .catch(error => console.error("❌ Error sending data to Flask server:", error));
 }
 
-
 function logExitActivity(tabId) {
     if (activeTab && startTime) {
         let exitTime = new Date();
@@ -33,7 +32,7 @@ function logExitActivity(tabId) {
             exit_time: exitTime.toISOString(),
             duration: duration
         };
-
+        
         sendToFlaskServer(data);
         console.log(`⏳ Exited: ${activeTab} at ${exitTime.toLocaleTimeString()} (Duration: ${duration}s)`);
     }
@@ -54,25 +53,119 @@ async function logEntryActivity(tabId) {
 }
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    let tab = await chrome.tabs.get(activeInfo.tabId);
-    
-    if (!tab.url || !tab.url.startsWith("http")) {
-        console.warn("⚠️ Ignoring non-webpage URL:", tab.url);
-        return;  // Skip non-http URLs
-    }
+    try {
+        let tab = await chrome.tabs.get(activeInfo.tabId);
 
-    let data = {
-        action: "log_tab_switch",
-        url: tab.url,
-        domain: new URL(tab.url).hostname,
-        tab_id: tab.id,
-        window_id: tab.windowId,
-        timestamp: new Date().toISOString()
-    };
-    
-    sendToFlaskServer(data);
-    console.log(`🔄 Switched to tab: ${tab.url}`);
+        if (!tab.url || !tab.url.startsWith("http")) {
+            console.warn("⚠️ Ignoring non-webpage URL:", tab.url || "No URL found");
+            return; // Skip non-http URLs
+        }
+
+        let urlSafety = await checkUrlSafety(tab.url);
+        console.log('The URL safety is:', urlSafety.safe);
+
+        let siteData = {
+            url: tab.url,
+            title: tab.title || "Unknown Page",
+            safe: urlSafety.safe,
+            message: urlSafety.message
+        };
+
+        // Store visited sites in Chrome storage (limit to last 10 entries)
+        chrome.storage.local.get(["visitedSites"], (result) => {
+            let visitedSites = result.visitedSites || [];
+            visitedSites.unshift(siteData); // Add new entry at the top
+            if (visitedSites.length > 10) visitedSites.pop(); // Keep last 10 entries
+            chrome.storage.local.set({ visitedSites });
+        });
+
+        if (!urlSafety.safe) {
+            showUnsafePopup(urlSafety.message);
+            console.warn(`🚨 Unsafe URL detected: ${tab.url} - ${urlSafety.message}`);
+            return; // Stop further processing if the site is unsafe
+        }
+
+        let data = {
+            action: "log_tab_switch",
+            url: tab.url,
+            domain: new URL(tab.url).hostname,
+            tab_id: tab.id,
+            window_id: tab.windowId,
+            timestamp: new Date().toISOString()
+        };
+
+        sendToFlaskServer(data);
+        console.log(`🔄 Switched to safe tab: ${tab.url}`);
+    } catch (error) {
+        console.error("❌ Error processing tab switch:", error);
+    }
 });
+
+
+// Function to check URL safety using Google Safe Browsing API
+async function checkUrlSafety(url) {
+    const apiKey = "AIzaSyDpXWQygKKAlLbwmwtT4i7xBnONUyf1Ar4";
+    // const apiKey2 = process.env.GOOGLE_API_KEY; // Set this in your environment
+    // console.log('The api key is:');
+    // console.log(apiKey2);
+    const endpoint = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
+
+    const requestPayload = {
+        client: {
+            clientId: "your-client-id",
+            clientVersion: "1.0"
+        },
+        threatInfo: {
+            threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
+            platformTypes: ["WINDOWS", "LINUX", "ALL_PLATFORMS"],
+            threatEntryTypes: ["URL"],
+            threatEntries: [
+                { url: url }
+            ]
+        }
+    };
+
+    try {
+        console.log("🔍 Checking URL safety:", url);
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(requestPayload)
+        });
+
+        if (!response.ok) {
+            console.error("❌ Failed to connect to Google Safe Browsing API:", response.status);
+            return { safe: true }; // Assume safe if API call fails
+        }
+
+        const result = await response.json();
+        if (result && result.matches && result.matches.length > 0) {
+            return {
+                safe: false,
+                message: `This URL is flagged as ${result.matches[0].threatType}`
+            };
+        }
+
+        return { safe: true }; // URL is safe
+    } catch (error) {
+        console.error("❌ Error during URL safety check:", error);
+        return { safe: true }; // Assume safe if API call fails
+    }
+}
+
+// Function to show a popup for unsafe URLs
+function showUnsafePopup(message) {
+    chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icon.png", // Path to your extension's icon
+        title: "Unsafe Website Detected",
+        message: message,
+        priority: 2
+    });
+}
+
 
 
 chrome.webNavigation.onCommitted.addListener((details) => {

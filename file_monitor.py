@@ -174,7 +174,7 @@ if __name__ == "__main__":
             if not self.locked_files:
                 self.update_status("No files found in database.")
                 return
-
+            
             self.file_monitor_thread = FileMonitorThread(self.locked_files, "your_auth_key_here")
             self.file_monitor_thread.update_signal.connect(self.update_status)
             self.file_monitor_thread.start()

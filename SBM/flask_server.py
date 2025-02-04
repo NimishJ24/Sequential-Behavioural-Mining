@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)  # Enables CORS for all requests
 
 # Set database path
-DB_PATH = os.path.join(os.path.expanduser("~"), "sbm_data", "tab_activity.sqlite")
+DB_PATH = os.path.join(os.path.expanduser("~"), "documents", "tab_activity.sqlite")
 
 # Ensure the directory exists
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)

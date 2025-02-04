@@ -2,16 +2,18 @@
 <html lang="en">
 <head>
     <title>Activity Tracker</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        button { padding: 10px; margin: 5px; cursor: pointer; }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h2>Activity Tracker</h2>
-    <p>Tracking your website visit times.</p>
-    <button id="clear">Clear Console</button>
-    <button id="printStats">Print Current Tab Stats</button>
+    <div class="container">
+        <h2>Activity Tracker</h2>
+        <p class="subtitle">Tracking your visited websites</p>
+
+        <div id="urlList" class="url-list">
+            <p class="empty-message">No data available.</p>
+        </div>
+    </div>
+
     <script src="popup.js"></script>
 </body>
 </html>
