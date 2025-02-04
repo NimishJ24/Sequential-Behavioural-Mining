@@ -30,47 +30,105 @@ class IDS:
         
         return n
     
+    def get_timeframe(self):
+        """
+        Opens the `soft_training.sqlite` database and retrieves the timestamp of the first and last entry.
+        Returns:
+            tuple: (start_time, end_time) as datetime objects.
+        """
+        conn = sqlite3.connect(TRAINING_DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM SOFTWARE")
+        result = cursor.fetchone()
+        conn.close()
+
+        if result and result[0] and result[1]:
+            start_time = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S")
+            end_time = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S")
+            return start_time, end_time
+        else:
+            raise ValueError("No data available in the database.")
+
+    def extract_key_data(self):
+        return self._extract_data_by_interval("Keyboard", ["key", "key_interval", "timestamp"])
+
+    def extract_mouse_data(self):
+        return self._extract_data_by_interval("Click", ["click_type", "click_interval", "position", "timestamp"])
+
+    def extract_focus_data(self):
+        return self._extract_data_by_interval("App in Focus", ["duration", "timestamp"])
+
+    def _extract_data_by_interval(self, data_type, columns):
+        """
+        Extract data from the database grouped into 30-second intervals.
+        Ensures there are entries for all intervals, even if they are empty.
+        """
+        # Open the training database
+        DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_training.sqlite")
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get the first and last timestamps for the entire database
+        cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM SOFTWARE")
+        first_timestamp, last_timestamp = cursor.fetchone()
+
+        if not first_timestamp or not last_timestamp:
+            conn.close()
+            return []  # Return empty list if no data exists for the given type
+
+        # Convert timestamps to datetime objects
+        first_time = datetime.strptime(first_timestamp, "%Y-%m-%d %H:%M:%S")
+        last_time = datetime.strptime(last_timestamp, "%Y-%m-%d %H:%M:%S")
+
+        # Initialize the loop and results
+        results = []
+        current_time = first_time
+
+        while current_time <= last_time:
+            next_time = current_time + timedelta(seconds=30)
+
+            # Fetch records for the current 30-second interval
+            cursor.execute(f"""
+                SELECT {", ".join(columns)} FROM SOFTWARE 
+                WHERE TYPE = ? AND timestamp >= ? AND timestamp < ?;
+            """, (data_type, current_time.strftime("%Y-%m-%d %H:%M:%S"), next_time.strftime("%Y-%m-%d %H:%M:%S")))
+            
+            # Store interval data (empty or populated)
+            interval_data = cursor.fetchall()
+            results.append(interval_data)
+
+            # Move to the next interval
+            current_time = next_time
+
+        conn.close()
+        return results
+
     
-    def extract_key_data():
-    # Database: soft_activity.sqlite in the user's Documents folder
-        DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        # Query 1: Total Keystrokes
-        cursor.execute("""
-            SELECT key, key_interval, timestamp FROM SOFTWARE WHERE TYPE = "Keyboard";
-        """)
-        result = cursor.fetchall()
-        conn.close()
+    def train(self):
+        # Extract the data for training
+        key_data = self.extract_key_data()
+        mouse_data = self.extract_mouse_data()
+        focus_data = self.extract_focus_data()
+        
+        print("Key Data:")
+        for interval in key_data:
+            print(interval)
+            print()
+        print("Mouse Data:")
+        for interval in mouse_data:
+            print(interval)
+            print()
+        print("Focus Data:")
+        for interval in focus_data:
+            print(interval)
+            print()
+            
+        
+        
 
-        return result
+# Create an instance of the IDS class
+ids_instance = IDS()
 
-    def extract_mouse_data():
-        DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        # Query 1: Total Keystrokes
-        cursor.execute("""
-            SELECT click_type, click_interval, position, timestamp FROM SOFTWARE WHERE TYPE = "Click";
-        """)
-        result = cursor.fetchall()
-        # print(result)
-        conn.close()
-
-        return result
-
-    def extract_focus_data():
-        DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        # Query 1: Total Keystrokes
-        cursor.execute("""
-            SELECT duration, timestamp FROM SOFTWARE WHERE TYPE = "App in Focus";
-        """)
-        result = cursor.fetchall()
-        # print(result)
-        conn.close()
-        return result
-    
-    def train():
-        print("helo")
+# Call the train method
+ids_instance.train()
