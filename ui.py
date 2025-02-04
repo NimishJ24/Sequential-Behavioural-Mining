@@ -635,7 +635,10 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
-        if(model.IntrusionDetector.test(model.IntrusionDetector)):
+        detector = model.IntrusionDetector()
+        model_result = bool(detector.run_inference())
+        print(model_result)
+        if(model_result):
             return True
         else:
             print("Ollama ka RAG nahi use kar rahe")
@@ -668,7 +671,7 @@ class MainUI(QMainWindow):
         self.monitor_thread.stop()
         self.file_monitor_thread.stop()
         event.accept()
-
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainUI()

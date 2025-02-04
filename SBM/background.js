@@ -104,10 +104,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 // Function to check URL safety using Google Safe Browsing API
 async function checkUrlSafety(url) {
-    const apiKey = "AIzaSyDpXWQygKKAlLbwmwtT4i7xBnONUyf1Ar4";
-    // const apiKey2 = process.env.GOOGLE_API_KEY; // Set this in your environment
-    // console.log('The api key is:');
-    // console.log(apiKey2);
+    const apiKey = "AIzaSyBQwJUKKgsZSSvUvvfwICx4tJ4THRLMULA";
     const endpoint = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
 
     const requestPayload = {

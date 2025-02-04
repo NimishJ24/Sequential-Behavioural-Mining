@@ -452,7 +452,7 @@ class ActivityMonitor(QThread):
         self.log_signal.emit("Old data (over 15 minutes) removed from soft_activity.sqlite.")
 
     def call_ollama_model(self, summary_text, suspicious = True):
-        prompt = f"Generate a 1-2 line summary of the following text. NO INTRO OR ANYTHING JUST RETURN THE SUMMARY:\n\n{summary_text}. We made a behavioural analysis model that predicted that the user is {'' if not suspicious else 'not '}suspicious. NO OTHER TEXT. DON'T MENTION TIME OR DATE. ONLY SUMMARIZE THE ACTIONS AND TRY TO PREDICT WHAT THE USER MAY BE TRYING TO DO"
+        prompt = f"Generate a 1-2 line summary of the following text. NO INTRO OR ANYTHING JUST RETURN THE SUMMARY:\n\n{summary_text}. We made a behavioural analysis model that predicted that the user is {'' if suspicious else 'not '}suspicious. NO OTHER TEXT. DON'T MENTION TIME OR DATE. ONLY SUMMARIZE THE ACTIONS AND TRY TO PREDICT WHAT THE USER MAY BE TRYING TO DO"
         try:
             response = ollama.chat(model="llama3:latest", messages=[{"role": "user", "content": prompt}])
             if 'message' in response and 'content' in response['message']:
@@ -470,48 +470,67 @@ class ActivityMonitor(QThread):
 
     def generate_summary_data(self):
         """
-        Every 1 minute, this function retrieves the records from the past minute,
-        removes any records that have NULL for critical fields or duplicate events, 
-        and then prepares a summary (action + timestamp) for sending to an Ollama model.
+        Every 2 minutes, this function retrieves the records from the past minute,
+        deduplicates them, generates a summary text, calls the Ollama model to produce a
+        short summary (using the behavioral data and the inference result), and saves
+        the result in the output SQLite database.
         """
+        # Get records from the past minute
         one_minute_ago = datetime.now() - timedelta(minutes=1)
         one_minute_ago_str = one_minute_ago.strftime("%Y-%m-%d %H:%M:%S")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         conn = sqlite3.connect(ACTIVITY_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT type, title, timestamp FROM software WHERE timestamp >= ? AND timestamp <= ?",
-                        (one_minute_ago_str, now_str))
+        cursor.execute("""
+            SELECT type, title, timestamp
+            FROM software
+            WHERE timestamp >= ? AND timestamp <= ?;
+        """, (one_minute_ago_str, now_str))
         rows = cursor.fetchall()
         conn.close()
-
+        
+        # Filter out rows with a NULL type
         filtered = [row for row in rows if row[0] is not None]
-
+        
+        # Deduplicate consecutive events based on type and title
         deduped = []
         prev = None
         for row in filtered:
             if prev is None or (row[0], row[1]) != (prev[0], prev[1]):
                 deduped.append(row)
                 prev = row
-
+        
+        # Build summary lines (e.g. "EventType at timestamp")
         summary_lines = [f"{event_type} at {timestamp}" for event_type, title, timestamp in deduped]
         summary_text = "\n".join(summary_lines)
         
-        model_result = bool(model.IntrusionDetector.test(model.IntrusionDetector))
-        result = self.call_ollama_model(summary_text, model_result)
+        # Run inference on the current data.
+        # run_inference returns True if normal (i.e. no anomaly), False if anomaly.
+        detector = model.IntrusionDetector()
+        model_result = detector.run_inference()
+        # Set suspicious flag: if model_result is True (normal), then suspicious is False.
+        suspicious = not model_result
+        
+        # Call the Ollama model to generate a 1-2 line summary.
+        ollama_summary = self.call_ollama_model(summary_text, suspicious=suspicious)
         output_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(result + " \n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
+        print(ollama_summary + "\n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
+        
+        # Insert the summary into the output SQLite database.
+        OUTPUT_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "output.sqlite")
         conn_output = sqlite3.connect(OUTPUT_DB_PATH)
         cursor_output = conn_output.cursor()
         cursor_output.execute("""
             INSERT INTO output_summary (description, model_output, timestamp)
             VALUES (?, ?, ?)
-        """, (result, str(model_result), output_timestamp))
+        """, (ollama_summary, str(model_result), output_timestamp))
         conn_output.commit()
         conn_output.close()
         
-        print(result + "\n\n ADDED TO TABLE")
-        self.log_signal.emit(f"Ollama summary: {result}")
+        print(ollama_summary + "\n\n ADDED TO TABLE")
+        # Optionally, emit a signal or log the Ollama summary.
+        self.log_signal.emit(f"Ollama summary: {ollama_summary}")
     
     def periodic_maintenance(self):
         while self.running:
@@ -522,7 +541,7 @@ class ActivityMonitor(QThread):
     def periodic_summary_generation(self):
         while self.running:
             self.generate_summary_data()
-            time.sleep(60)
+            time.sleep(120)
 
     # ---------------- Stop the monitor ----------------
     def stop(self):
@@ -559,6 +578,7 @@ def view_training_database():
 
 if __name__ == '__main__':
     # For testing purposes, run the ActivityMonitor in a console application.
+    create_activity_table()
     monitor = ActivityMonitor()
     monitor.start()
     try:
