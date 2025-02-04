@@ -10,15 +10,16 @@ from PyQt6.QtWidgets import (
     QInputDialog, QToolButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QGridLayout, QSizePolicy
 )
-from PyQt6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF, QSize
+from PyQt6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont, QPen, QBrush
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF, QSize, QMargins
 from PyQt6.QtCharts import QChart, QChartView, QPieSeries, QLineSeries, QDateTimeAxis, QValueAxis
 import activity_monitor
 from file_monitor import FileMonitorThread
 import json
+import time
 
 # Database Path
-DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "activity.sqlite")
+DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
 
 # Initialize Database
 def init_db():
@@ -28,19 +29,28 @@ def init_db():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT
                     )""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS Software (
+    cursor.execute("""CREATE TABLE IF NOT EXISTS software (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        Type TEXT NOT NULL,
-                        Keyboard TEXT,
-                        Click TEXT,
-                        Scroll TEXT,
-                        AppOpen TEXT,
-                        AppClosed TEXT,
-                        AppInFocus TEXT,
-                        AllAppsOpen TEXT,
-                        PCUsage TEXT,
-                        ExternalPeripherals TEXT,
-                        Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        type TEXT CHECK(type IN (
+                            'Keyboard', 'Click', 'Scroll', 
+                            'AppOpen', 'AppClosed', 'AppInFocus',
+                            'PCUsage', 'ExternalDevice'
+                        )),
+                        title TEXT,
+                        key TEXT,
+                        key_interval REAL,
+                        click_type TEXT,
+                        click_interval REAL,
+                        position TEXT,
+                        scroll_direction TEXT,
+                        scroll_speed REAL,
+                        scroll_interval REAL,
+                        duration REAL,
+                        cpu_usage REAL,
+                        memory_usage REAL,
+                        device_id TEXT,
+                        device_type TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                     )""")
     conn.commit()
     conn.close()
@@ -119,6 +129,7 @@ class MainUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.auth_key = self.setup_google_authenticator()
+        self.start_time = time.time()
         
         self.nav_buttons = {}
         self.locked_files = self.get_blocked_items()
@@ -280,75 +291,98 @@ class MainUI(QMainWindow):
         return card
 
     def update_charts(self):
-        # Timeline Chart
+        # Create a line series for CPU usage
         usage_series = QLineSeries()
+        usage_series.setName("CPU Usage")
+        # Optional: set a custom pen for a modern look
+        pen = QPen(QColor(0, 170, 255))
+        pen.setWidth(3)
+        usage_series.setPen(pen)
+        
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        cursor.execute("""SELECT Timestamp, PCUsage 
-                        FROM Software 
-                        WHERE Type = 'PCUsage'
-                        ORDER BY Timestamp""")
+        cursor.execute("""
+            SELECT Timestamp, cpu_usage
+            FROM Software 
+            WHERE type = 'PC Usage'
+            ORDER BY Timestamp
+        """)
         
-        for ts, pc_usage in cursor.fetchall():
-            usage_data = json.loads(pc_usage)
-            timestamp = datetime.fromisoformat(ts)
-            usage_series.append(
-                timestamp.timestamp() * 1000, 
-                usage_data.get('cpu_utilization', 0)
-            )
+        for ts, cpu_usage in cursor.fetchall():
+            try:
+                timestamp_dt = datetime.fromisoformat(ts)
+            except Exception as e:
+                timestamp_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            timestamp_ms = timestamp_dt.timestamp() * 1000  # QDateTimeAxis expects milliseconds
+            usage_series.append(timestamp_ms, cpu_usage)
         
-        timeline_series = QLineSeries()
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT timestamp, cpu_tick FROM activity ORDER BY timestamp")
+        conn.close()
         
-        total_duration = 0
-        prev_time = None
-        for ts, tick in cursor.fetchall():
-            current_time = datetime.fromisoformat(ts)
-            int(current_time.timestamp() * 1000)
-            if prev_time:
-                total_duration += (current_time - prev_time).total_seconds()
-            prev_time = current_time
-            timeline_series.append(current_time.timestamp() * 1000, float(tick))
-        
-        # Update screen time
+        # Use the system's internal time for screen time.
+        total_duration = time.time() - self.start_time  # self.start_time should be set when the monitor starts
         hours = int(total_duration // 3600)
         minutes = int((total_duration % 3600) // 60)
         self.screen_time_card.layout().itemAt(1).widget().setText(f"{hours}h {minutes}m")
         
+        # Create and configure the chart
         timeline_chart = QChart()
-        timeline_chart.addSeries(timeline_series)
+        timeline_chart.addSeries(usage_series)
         timeline_chart.setTitle("Activity Timeline")
         timeline_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
         
+        # Set dark background for the entire chart
+        timeline_chart.setBackgroundBrush(QBrush(QColor(30, 30, 30)))
+        # Set a darker plot area background for contrast and enable background visibility
+        timeline_chart.setPlotAreaBackgroundBrush(QBrush(QColor(40, 40, 40)))
+        timeline_chart.setPlotAreaBackgroundVisible(True)
+        
+        # Configure the X-axis as a date/time axis.
         axis_x = QDateTimeAxis()
         axis_x.setFormat("hh:mm")
-        axis_y = QValueAxis()
+        axis_x.setTitleText("Time")
+        # Set axis label and line colors to white for contrast
+        axis_x.setLabelsColor(QColor("white"))
+        axis_x.setTitleBrush(QBrush(QColor("white")))
+        axis_x.setLinePenColor(QColor("white"))
+        axis_x.setGridLineColor(QColor(80, 80, 80))
+        
         timeline_chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
+        
+        # Configure the Y-axis as a value axis.
+        axis_y = QValueAxis()
+        axis_y.setTitleText("CPU Usage (%)")
+        axis_y.setLabelsColor(QColor("white"))
+        axis_y.setTitleBrush(QBrush(QColor("white")))
+        axis_y.setLinePenColor(QColor("white"))
+        axis_y.setGridLineColor(QColor(80, 80, 80))
+        
         timeline_chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
-        timeline_series.attachAxis(axis_x)
-        timeline_series.attachAxis(axis_y)
-        self.timeline_chart.setChart(timeline_chart)
+        
+        # Attach axes to the series.
+        usage_series.attachAxis(axis_x)
+        usage_series.attachAxis(axis_y)
+        
+        # Optionally, add some margins for a cleaner look.
+        timeline_chart.setMargins(QMargins(10, 10, 10, 10))
 
-        # Distribution Chart
-        pie_series = QPieSeries()
-        cursor.execute("SELECT type, COUNT(*) FROM activity GROUP BY type")
-        total_activities = 0
-        for activity_type, count in cursor.fetchall():
-            pie_series.append(f"{activity_type} ({count})", count)
-            total_activities += count
         
-        self.activities_card.layout().itemAt(1).widget().setText(str(total_activities))
+        # Assuming self.timeline_chart is a QChartView, enable antialiasing for smoother edges.
+        self.timeline_chart.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        distribution_chart = QChart()
-        distribution_chart.addSeries(pie_series)
-        distribution_chart.setTitle("Activity Distribution")
-        distribution_chart.setAnimationOptions(QChart.AnimationOption.AllAnimations)
-        self.distribution_chart.setChart(distribution_chart)
+        # Apply a stylesheet to the QChartView to create rounded corners and a modern border.
+        # (Note: This stylesheet applies to the QChartView widget, not the QChart inside it.)
+        self.timeline_chart.setStyleSheet("""
+            QChartView {
+                border-radius: 15px;
+                background-color: #1e1e1e;
+            }
+        """)
         
-        conn.close()
+        # Finally, update the chart view with the new chart.
+        self.timeline_chart.setChart(timeline_chart)
+        
+        
 
     def load_initial_data(self):
         self.load_blocked_items()
@@ -369,31 +403,27 @@ class MainUI(QMainWindow):
     def load_history_data(self):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("""SELECT Type, Timestamp, 
-                        CASE 
-                            WHEN Type = 'Keyboard' THEN Keyboard
-                            WHEN Type = 'Click' THEN Click
-                            WHEN Type = 'PCUsage' THEN PCUsage
-                            ELSE ''
-                        END AS Details
-                        FROM Software
-                        ORDER BY Timestamp DESC""")
+        cursor.execute("""
+            SELECT type, timestamp, 
+                COALESCE(title, key, click_type, scroll_direction, device_type, 'N/A') AS main_detail,
+                duration, cpu_usage, memory_usage
+            FROM software
+            ORDER BY timestamp DESC
+            LIMIT 100
+        """)
         
         self.history_table.setRowCount(0)
+        self.history_table.setColumnCount(6)
+        self.history_table.setHorizontalHeaderLabels([
+            "Type", "Timestamp", "Main Detail", 
+            "Duration", "CPU %", "Memory %"
+        ])
         
-        for row_idx, (act_type, timestamp, details) in enumerate(cursor.fetchall()):
+        for row_idx, row_data in enumerate(cursor.fetchall()):
             self.history_table.insertRow(row_idx)
-            self.history_table.setItem(row_idx, 0, QTableWidgetItem(act_type))
-            self.history_table.setItem(row_idx, 1, QTableWidgetItem(timestamp))
-            
-            # Format details based on type
-            try:
-                detail_data = json.loads(details)
-                formatted = "\n".join([f"{k}: {v}" for k,v in detail_data.items()])
-            except:
-                formatted = details
-                
-            self.history_table.setItem(row_idx, 2, QTableWidgetItem(formatted))
+            for col_idx, col_data in enumerate(row_data):
+                item = QTableWidgetItem(str(col_data) if col_data else "N/A")
+                self.history_table.setItem(row_idx, col_idx, item)
         
         conn.close()
 
