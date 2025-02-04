@@ -546,6 +546,9 @@ class MainUI(QMainWindow):
         print(model.IDS.test(model.IDS))
         if(model.IDS.test(model.IDS)):
             return True
+        else:
+            # insert popup ?
+            print("Ollama ka RAG nahi use kar rahe")
         totp = pyotp.TOTP(self.auth_key)
         otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)
         return ok and totp.verify(otp)
