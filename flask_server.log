@@ -36,3 +36,4 @@ INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 17:13:57] "POST /log_activity HTTP/1.1"
 INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 17:13:58] "POST /log_activity HTTP/1.1" 200 -
 INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 17:13:58] "POST /log_activity HTTP/1.1" 200 -
 INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 17:14:40] "POST /log_activity HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [04/Feb/2025 17:16:30] "POST /log_activity HTTP/1.1" 200 -
