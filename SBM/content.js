@@ -3,6 +3,7 @@ function sendToFlaskServer(data) {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
+
         },
         body: JSON.stringify(data),
     }).then(response => response.json())
@@ -12,7 +13,7 @@ function sendToFlaskServer(data) {
 
 document.addEventListener('click', (event) => {
     let data = {
-        action: "log_mouse_click",
+        action: "mouse_click",
         timestamp: new Date().toISOString(),
         x: event.clientX,
         y: event.clientY,
@@ -23,22 +24,11 @@ document.addEventListener('click', (event) => {
     console.log(`🖱️ Mouse click at (${event.clientX}, ${event.clientY}) on ${event.target.tagName}`);
 });
 
-document.addEventListener('click', (event) => {
-    if (event.target.tagName === "A" && event.target.href) {
-        let data = {
-            action: "log_link_click",
-            timestamp: new Date().toISOString(),
-            url: event.target.href,
-            referrer: document.referrer
-        };
-        sendToFlaskServer(data);
-        console.log(`🔗 Link clicked: ${event.target.href}`);
-    }
-});
+
 
 document.addEventListener('keydown', (event) => {
     let data = {
-        action: "log_key_press",
+        action: "key_press",
         timestamp: new Date().toISOString(),
         key: event.key,
         url: window.location.href

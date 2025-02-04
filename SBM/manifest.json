@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SBM - extension",
   "version": "1.1",
-  "description": "Logs website visit times and exits in the console",
+  "description": "Logs mouse clicks, key presses, and tab activity",
   "permissions": [
     "tabs",
     "storage",

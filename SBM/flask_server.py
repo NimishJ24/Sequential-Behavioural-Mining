@@ -1,20 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
-import logging
 import os
 
-DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "web_activity.sqlite")
-print(DB_PATH)
-
 app = Flask(__name__)
+CORS(app)  # Enables CORS for all requests
 
-CORS(app, origins=["chrome-extension://fgiajiopnnaiglhakioljbohcemblmop"])
+# Set database path
+DB_PATH = os.path.join(os.path.expanduser("~"), "sbm_data", "tab_activity.sqlite")
 
-
-
-logging.basicConfig(filename='flask_server.log', level=logging.DEBUG)
-
+# Ensure the directory exists
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 def init_db():
@@ -25,13 +20,20 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             action TEXT,
             url TEXT,
-            title TEXT,
+            domain TEXT,
+            tab_id INTEGER,
+            window_id INTEGER,
             entry_time TEXT,
             exit_time TEXT,
             key_pressed TEXT,
+            click_type TEXT,
             x INTEGER,
             y INTEGER,
-            element TEXT
+            scroll_direction TEXT,
+            scroll_distance REAL,
+            scroll_interval REAL,
+            interactive_element TEXT,
+            timestamp TEXT
         )
     """)
     conn.commit()
@@ -39,30 +41,41 @@ def init_db():
 
 init_db()
 
-def log_activity(data):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO activity (action, url, title, entry_time, exit_time, key_pressed, x, y, element) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data.get("action"), data.get("url"), data.get("title"),
-        data.get("entry_time"), data.get("exit_time"),
-        data.get("key_pressed"), data.get("x"), data.get("y"),
-        data.get("element")
-    ))
-    conn.commit()
-    conn.close()
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 @app.route('/log_activity', methods=['POST'])
-def log_activity_endpoint():
+def log_activity():
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Request must be JSON"}), 400
+    
+    data = request.get_json()
+    
+    # Debugging output
+    print("Received:", data)
+
     try:
-        data = request.json
-        log_activity(data)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO activity (action, url, domain, tab_id, window_id, entry_time, exit_time, key_pressed, click_type, x, y, scroll_direction, scroll_distance, scroll_interval, interactive_element, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get("action"), data.get("url"), data.get("domain"), data.get("tab_id"), data.get("window_id"),
+            data.get("entry_time"), data.get("exit_time"), data.get("key_pressed"), data.get("click_type"),
+            data.get("x"), data.get("y"), data.get("scroll_direction"), data.get("scroll_distance"), 
+            data.get("scroll_interval"), data.get("interactive_element"), data.get("timestamp")
+        ))
+        conn.commit()
+        conn.close()
         return jsonify({"success": True}), 200
     except Exception as e:
-        logging.error(f"Error logging activity: {str(e)}")
+        print("❌ Error saving data to database:", str(e))
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True, port=5000)

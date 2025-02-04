@@ -6,14 +6,19 @@ let tabTitles = {};
 function sendToFlaskServer(data) {
     fetch("http://localhost:5000/log_activity", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-    }).then(response => response.json())
-    .then(data => console.log("✅ Data saved:", data))
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+        }
+        return response.json();  // Parse JSON only if response is OK
+    })
+    .then(data => console.log("✅ Data sent:", data))
     .catch(error => console.error("❌ Error sending data to Flask server:", error));
 }
+
 
 function logExitActivity(tabId) {
     if (activeTab && startTime) {
@@ -49,10 +54,26 @@ async function logEntryActivity(tabId) {
 }
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    let previousTabId = Object.keys(tabStartTimes).find(id => id !== activeInfo.tabId.toString());
-    if (previousTabId) logExitActivity(parseInt(previousTabId));
-    logEntryActivity(activeInfo.tabId);
+    let tab = await chrome.tabs.get(activeInfo.tabId);
+    
+    if (!tab.url || !tab.url.startsWith("http")) {
+        console.warn("⚠️ Ignoring non-webpage URL:", tab.url);
+        return;  // Skip non-http URLs
+    }
+
+    let data = {
+        action: "log_tab_switch",
+        url: tab.url,
+        domain: new URL(tab.url).hostname,
+        tab_id: tab.id,
+        window_id: tab.windowId,
+        timestamp: new Date().toISOString()
+    };
+    
+    sendToFlaskServer(data);
+    console.log(`🔄 Switched to tab: ${tab.url}`);
 });
+
 
 chrome.webNavigation.onCommitted.addListener((details) => {
     if (details.frameId === 0) {
