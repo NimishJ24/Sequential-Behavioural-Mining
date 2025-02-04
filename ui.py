@@ -21,6 +21,7 @@ import model
 
 # Database Path
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
+TRAINING_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_training.sqlite")
 
 # Initialize Database
 def init_db():
@@ -138,7 +139,7 @@ class MainUI(QMainWindow):
         
         self.setup_monitoring()
         self.load_initial_data()
-        
+    
     def get_blocked_items(self):
         """Get blocked items from database (without UI interaction)"""
         conn = sqlite3.connect(DB_PATH)
@@ -502,8 +503,8 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
-        print(model.IDS.verify())
-        if(model.IDS.verify()):
+        print(model.IDS.test())
+        if(model.IDS.test()):
             return True
         totp = pyotp.TOTP(self.auth_key)
         otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)

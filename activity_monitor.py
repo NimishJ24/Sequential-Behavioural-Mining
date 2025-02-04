@@ -12,6 +12,7 @@ import ollama
 from PyQt5.QtCore import QThread, pyqtSignal
 from pynput import keyboard, mouse
 import psutil
+import model
 
 # Database: soft_activity.sqlite in the user's Documents folder
 ACTIVITY_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
@@ -379,8 +380,9 @@ class ActivityMonitor(QThread):
         conn_dest.close()
         
         self.first10_copied = True
+        model.IDS.train()
         self.log_signal.emit("First 10 minutes data copied to soft_training.sqlite.")
-
+    
     def cleanup_old_data(self):
         """
         Remove any records from soft_activity.sqlite that are over 15 minutes old.
