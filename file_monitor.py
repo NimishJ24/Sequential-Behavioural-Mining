@@ -114,17 +114,6 @@ class FileMonitorThread(QThread):
         self.auth_key = auth_key
         self.running = True
         self.monitor = FileAccessMonitor(self.locked_files, self.update_signal, self.auth_key)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.monitor.monitor_file_access)
-
-    def run(self):
-        """Start monitoring locked files."""
-        self.timer.start(2000)  # Check every 2 seconds
-
-    def stop(self):
-        """Stop monitoring files."""
-        self.timer.stop()
-        self.running = False
 
     def add_locked_file(self, file_path):
         """Add a file to the monitor's locked files list."""

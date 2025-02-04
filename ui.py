@@ -527,8 +527,10 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
-        print(model.IntrusionDetector.test(model.IntrusionDetector))
-        if(model.IntrusionDetector.test(model.IntrusionDetector)):
+        detector = model.IntrusionDetector()
+        model_result = bool(detector.test())
+        print(model_result)
+        if(model_result):
             return True
         else:
             # insert popup ?

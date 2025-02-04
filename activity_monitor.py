@@ -471,20 +471,21 @@ class ActivityMonitor(QThread):
     def generate_summary_data(self):
         """
         Every 1 minute, this function retrieves the records from the past minute,
-        removes any records that have NULL for critical fields or duplicate events, 
+        removes any records that have NULL for critical fields or duplicate events,
         and then prepares a summary (action + timestamp) for sending to an Ollama model.
         """
+        time.sleep(60)
         one_minute_ago = datetime.now() - timedelta(minutes=1)
         one_minute_ago_str = one_minute_ago.strftime("%Y-%m-%d %H:%M:%S")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         conn = sqlite3.connect(ACTIVITY_DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT type, title, timestamp FROM software WHERE timestamp >= ? AND timestamp <= ?",
                         (one_minute_ago_str, now_str))
         rows = cursor.fetchall()
         conn.close()
-
+        
         filtered = [row for row in rows if row[0] is not None]
 
         deduped = []
@@ -496,8 +497,8 @@ class ActivityMonitor(QThread):
 
         summary_lines = [f"{event_type} at {timestamp}" for event_type, title, timestamp in deduped]
         summary_text = "\n".join(summary_lines)
-        
-        model_result = bool(model.IntrusionDetector.test(model.IntrusionDetector))
+        detector = model.IntrusionDetector()
+        model_result = bool(detector.test())
         result = self.call_ollama_model(summary_text, model_result)
         output_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(result + " \n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
@@ -559,6 +560,7 @@ def view_training_database():
 
 if __name__ == '__main__':
     # For testing purposes, run the ActivityMonitor in a console application.
+    create_activity_table()
     monitor = ActivityMonitor()
     monitor.start()
     try:
