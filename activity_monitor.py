@@ -17,6 +17,7 @@ import model
 # Database: soft_activity.sqlite in the user's Documents folder
 ACTIVITY_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
 TRAINING_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_training.sqlite")
+
 OUTPUT_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "output.sqlite")
 
 def create_activity_table():
@@ -98,7 +99,7 @@ class ActivityMonitor(QThread):
         super().__init__()
         self.running = True
 
-        # Mark the start time (for use in the “first 10 minutes” copy)
+        # Mark the start time (for use in the "first 10 minutes" copy)
         self.start_time = time.time()
         self.first10_copied = False
 
@@ -131,7 +132,7 @@ class ActivityMonitor(QThread):
     # --------------- Main run loop ------------------
 
     def run(self):
-        # Log any already open windows (platform‐dependent)
+        # Log any already open windows (platform-dependent)
         self.log_initial_open_windows()
 
         # Start listeners
@@ -249,7 +250,7 @@ class ActivityMonitor(QThread):
     # ---------------- Window / Application events ----------------
 
     def get_active_window_title(self):
-        """Return the title of the active window, platform‐dependent."""
+        """Return the title of the active window, platform-dependent."""
         title = None
         try:
             if self.os == "Windows":
@@ -341,63 +342,101 @@ class ActivityMonitor(QThread):
 
     # ---------------- Additional Maintenance Functions ----------------
     def copy_first_10_minutes(self):
-        # Check if the training DB already exists
-        if os.path.exists(TRAINING_DB_PATH):
-            self.log_signal.emit("soft_training.sqlite already exists. No changes made.")
-            self.first10_copied = True
-            return
-
-        # Open the source database and get the first record's timestamp.
-        time.sleep(6)
-        conn_source = sqlite3.connect(ACTIVITY_DB_PATH)
-        cursor_source = conn_source.cursor()
-        cursor_source.execute("SELECT timestamp FROM software ORDER BY timestamp ASC LIMIT 1")
-        row = cursor_source.fetchone()
-        if not row:
-            self.log_signal.emit("No data found in soft_activity.sqlite to copy.")
-            conn_source.close()
-            return
-
-        first_timestamp_str = row[0]
+        """Modified to ensure data persistence and proper copying"""
         try:
-            first_time = datetime.fromisoformat(first_timestamp_str)
-        except Exception:
-            first_time = datetime.strptime(first_timestamp_str, "%Y-%m-%d %H:%M:%S")
-        cutoff_time = first_time + timedelta(minutes=10)
+            # Wait for initial data collection
+            time.sleep(6)
+            
+            conn_source = sqlite3.connect(ACTIVITY_DB_PATH)
+            cursor_source = conn_source.cursor()
+            
+            # Get the first record's timestamp
+            cursor_source.execute("SELECT timestamp FROM software ORDER BY timestamp ASC LIMIT 1")
+            row = cursor_source.fetchone()
+            
+            if not row:
+                self.log_signal.emit("No data found in soft_activity.sqlite to copy.")
+                conn_source.close()
+                return
 
-        # Convert times back to strings in the expected format.
-        first_timestamp_formatted = first_time.strftime("%Y-%m-%d %H:%M:%S")
-        cutoff_str = cutoff_time.strftime("%Y-%m-%d %H:%M:%S")
+            first_timestamp_str = row[0]
+            try:
+                first_time = datetime.fromisoformat(first_timestamp_str)
+            except Exception:
+                first_time = datetime.strptime(first_timestamp_str, "%Y-%m-%d %H:%M:%S")
+            
+            cutoff_time = first_time + timedelta(minutes=10)
+            first_timestamp_formatted = first_time.strftime("%Y-%m-%d %H:%M:%S")
+            cutoff_str = cutoff_time.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Select rows with timestamp between the first record and 10 minutes later.
-        cursor_source.execute(
-            "SELECT * FROM software WHERE timestamp >= ? AND timestamp <= ?",
-            (first_timestamp_formatted, cutoff_str)
-        )
-        rows = cursor_source.fetchall()
-        conn_source.close()
+            # Select rows within the first 10 minutes
+            cursor_source.execute(
+                "SELECT * FROM software WHERE timestamp >= ? AND timestamp <= ?",
+                (first_timestamp_formatted, cutoff_str)
+            )
+            rows = cursor_source.fetchall()
+            conn_source.close()
 
-        # Create the training table if it does not exist.
-        create_training_table()
+            if not rows:
+                self.log_signal.emit("No data found within first 10 minutes.")
+                return
 
-        # Insert the selected rows into the training database.
-        conn_dest = sqlite3.connect(TRAINING_DB_PATH)
-        cursor_dest = conn_dest.cursor()
-        for row in rows:
-            # Skip the id column (row[0]) when inserting.
+            # Create and populate the training database
+            conn_dest = sqlite3.connect(TRAINING_DB_PATH)
+            cursor_dest = conn_dest.cursor()
+            
+            # Ensure the table exists
             cursor_dest.execute("""
-                INSERT INTO software (
-                    type, title, key, key_interval, click_type, click_interval, position, 
-                    scroll_direction, scroll_speed, scroll_interval, duration, 
-                    cpu_usage, memory_usage, device_id, device_type, timestamp
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, row[1:])
-        conn_dest.commit()
-        conn_dest.close()
-        
-        self.first10_copied = True
-        model.IntrusionDetector.train()
-        self.log_signal.emit("First 10 minutes data copied to soft_training.sqlite.")
+                CREATE TABLE IF NOT EXISTS software (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT,
+                    title TEXT,
+                    key TEXT,
+                    key_interval REAL,
+                    click_type TEXT,
+                    click_interval REAL,
+                    position TEXT,
+                    scroll_direction TEXT,
+                    scroll_speed REAL,
+                    scroll_interval REAL,
+                    duration REAL,
+                    cpu_usage REAL,
+                    memory_usage REAL,
+                    device_id TEXT,
+                    device_type TEXT,
+                    timestamp TEXT
+                )
+            """)
+            
+            # Clear existing data if any
+            cursor_dest.execute("DELETE FROM software")
+            
+            # Insert the new data
+            for row in rows:
+                cursor_dest.execute("""
+                    INSERT INTO software (
+                        type, title, key, key_interval, click_type, click_interval, position,
+                        scroll_direction, scroll_speed, scroll_interval, duration,
+                        cpu_usage, memory_usage, device_id, device_type, timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, row[1:])  # Skip the id column
+            
+            conn_dest.commit()
+            conn_dest.close()
+            
+            self.first10_copied = True
+            self.log_signal.emit(f"Successfully copied {len(rows)} records to training database.")
+            
+            # Train the model after copying data
+            try:
+                model.IDS.train()
+                self.log_signal.emit("Model training completed successfully.")
+            except Exception as e:
+                self.log_signal.emit(f"Error training model: {str(e)}")
+                
+        except Exception as e:
+            self.log_signal.emit(f"Error in copy_first_10_minutes: {str(e)}")
+            raise
     
     def cleanup_old_data(self):
         """
@@ -489,12 +528,45 @@ class ActivityMonitor(QThread):
     def stop(self):
         self.running = False
 
+def view_training_database():
+    """
+    Function to view the contents of the training database
+    """
+    try:
+        conn = sqlite3.connect(TRAINING_DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get all records from the software table
+        cursor.execute("SELECT * FROM software")
+        rows = cursor.fetchall()
+        
+        # Get column names
+        cursor.execute("PRAGMA table_info(software)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        print("\n=== Training Database Contents ===")
+        print("Columns:", columns)
+        print("\nRecords:")
+        for row in rows:
+            print(row)
+            
+        conn.close()
+        return rows
+        
+    except Exception as e:
+        print(f"Error viewing database: {str(e)}")
+        return []
+
 if __name__ == '__main__':
     # For testing purposes, run the ActivityMonitor in a console application.
     monitor = ActivityMonitor()
     monitor.start()
     try:
         while True:
+            # Add a command to view database contents
+            command = input("Enter 'view' to see database contents, or press Ctrl+C to exit: ")
+            if command.lower() == 'view':
+                view_training_database()
             time.sleep(1)
     except KeyboardInterrupt:
         monitor.stop()
