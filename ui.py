@@ -37,7 +37,7 @@ def init_db():
                         type TEXT CHECK(type IN (
                             'Keyboard', 'Click', 'Scroll', 
                             'AppOpen', 'AppClosed', 'AppInFocus',
-                            'PCUsage', 'ExternalDevice'
+                            'PC Usage', 'ExternalDevice'
                         )),
                         title TEXT,
                         key TEXT,
@@ -126,6 +126,21 @@ DARK_THEME = """
         background-color: #1F1F1F;
         border-radius: 12px;
     }
+    QToolButton {
+        background-color: #1F1F1F;
+        border-radius: 8px;
+        padding: 16px;
+        color: #888;
+        font-weight: bold;
+        border: 1px solid #333;
+    }
+    QToolButton:checked {
+        background-color: #6200EE;
+        color: white;
+    }
+    QToolButton:checked:hover {
+        background-color: #7C4DFF;
+    }
 """
 
 class MainUI(QMainWindow):
@@ -166,10 +181,47 @@ class MainUI(QMainWindow):
 
     def setup_navigation(self):
         nav_widget = QWidget()
-        nav_widget.setFixedWidth(100)
+        nav_widget.setFixedWidth(150)  # Increased width to accommodate profile
         nav_layout = QVBoxLayout(nav_widget)
-        nav_layout.setContentsMargins(0, 0, 0, 0)
-        nav_layout.setSpacing(10)
+        nav_layout.setContentsMargins(10, 20, 10, 20)
+        nav_layout.setSpacing(15)
+
+        # Add Profile Section
+        profile_widget = QWidget()
+        profile_widget.setStyleSheet("border-bottom: 1px solid #333; padding-bottom: 15px;")
+        profile_layout = QHBoxLayout(profile_widget)
+        profile_layout.setContentsMargins(0, 0, 0, 0)
+        profile_layout.setSpacing(15)
+
+        # Profile Picture
+        profile_pic = QLabel()
+        profile_pic.setFixedSize(50, 50)
+        profile_pic.setStyleSheet("""
+            background-color: #333;
+            border-radius: 25px;
+            qproperty-pixmap: url('icons/user.png');
+        """)
+        profile_pic.setPixmap(QIcon.fromTheme("avatar-default").pixmap(40, 40))
+        
+        # Profile Text
+        text_widget = QWidget()
+        text_layout = QVBoxLayout(text_widget)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+        
+        username = QLabel("Aryan Bharuka")
+        username.setStyleSheet("font-size: 14px; font-weight: 500; color: white;")
+        
+        email = QLabel("aryan.bharuka20@gmail.com")
+        email.setStyleSheet("font-size: 12px; color: #888;")
+        
+        text_layout.addWidget(username)
+        text_layout.addWidget(email)
+        
+        profile_layout.addWidget(profile_pic)
+        profile_layout.addWidget(text_widget)
+        
+        nav_layout.addWidget(profile_widget)
 
         buttons = [
             ("Home", "icons/home.png"),
@@ -181,10 +233,10 @@ class MainUI(QMainWindow):
             btn = QToolButton()
             btn.setText(text)
             btn.setIcon(QIcon(icon))
-            btn.setIconSize(QSize(24, 24))
+            btn.setIconSize(QSize(28, 28))  # Larger icons
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
             btn.setCheckable(True)
-            btn.setFixedSize(80, 80)
+            btn.setFixedSize(100, 100)  # Larger buttons
             btn.clicked.connect(self.change_page)
             nav_layout.addWidget(btn)
             self.nav_buttons[text] = btn
@@ -224,12 +276,31 @@ class MainUI(QMainWindow):
         self.stack.addWidget(home_page)
 
     def setup_history_page(self):
-        # Create main widget and layout for the History page.
         self.history_page = QWidget()
         layout = QVBoxLayout(self.history_page)
         layout.setSpacing(10)
 
-        # Create a scrollable area for history record widgets.
+        # Filter Bar
+        filter_bar = QWidget()
+        filter_layout = QHBoxLayout(filter_bar)
+        filter_layout.setContentsMargins(0, 0, 0, 10)
+        
+        self.safe_filter = QPushButton("Safe")
+        self.safe_filter.setCheckable(True)
+        self.safe_filter.setStyleSheet("QPushButton:checked { background-color: #4CAF50; }")
+        self.safe_filter.clicked.connect(lambda: self.apply_history_filter("safe"))
+        
+        self.unsafe_filter = QPushButton("Unsafe")
+        self.unsafe_filter.setCheckable(True)
+        self.unsafe_filter.setStyleSheet("QPushButton:checked { background-color: #FF4D4D; }")
+        self.unsafe_filter.clicked.connect(lambda: self.apply_history_filter("unsafe"))
+        
+        filter_layout.addWidget(QLabel("Filters:"))
+        filter_layout.addWidget(self.safe_filter)
+        filter_layout.addWidget(self.unsafe_filter)
+        filter_layout.addStretch()
+
+        # Scroll Area
         self.history_scroll_area = QScrollArea()
         self.history_scroll_area.setWidgetResizable(True)
         self.history_scroll_content = QWidget()
@@ -237,32 +308,82 @@ class MainUI(QMainWindow):
         self.history_scroll_layout.setSpacing(15)
         self.history_scroll_area.setWidget(self.history_scroll_content)
 
+        layout.addWidget(filter_bar)
         layout.addWidget(self.history_scroll_area)
-
-        # Add the History page to the stack.
         self.stack.addWidget(self.history_page)
 
     def setup_blocked_page(self):
+       
         blocked_page = QWidget()
         layout = QVBoxLayout(blocked_page)
+        layout.setContentsMargins(20, 20, 20, 20)  # Uniform margins
         layout.setSpacing(15)
-        
-        # Initialize blocked_list here
-        self.blocked_list = QListWidget()  # Add this line
+
+        # Blocked list (main content area)
+        self.blocked_list = QListWidget()
+        self.blocked_list.setStyleSheet("""
+            QListWidget {
+                background-color: #1F1F1F;
+                border: 1px solid #333;
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.blocked_list.itemDoubleClicked.connect(self.remove_blocked_item)
-        
-        add_btn = QToolButton()
-        add_btn.setText("Add Item")
-        add_btn.setIcon(QIcon("icons/add.png"))
+        layout.addWidget(self.blocked_list, 1)  # Stretch factor 1 to take remaining space
+
+        # Add Item Button (bottom section)
+        add_btn = QPushButton()
+        add_btn.setFixedHeight(60)
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1F1F1F;
+                border: 2px dashed #555;
+                border-radius: 8px;
+                margin: 10px 20px;  # Horizontal margin
+            }
+            QPushButton:hover {
+                border-color: #777;
+                background-color: #1a1a1a;
+            }
+        """)
         add_btn.clicked.connect(self.browse_and_lock)
+
+        # Button content layout
+        btn_content = QWidget()
+        btn_layout = QHBoxLayout(btn_content)
+        btn_layout.setContentsMargins(20, 0, 20, 0)
         
+        # Plus icon
+        plus_icon = QLabel("+")
+        plus_icon.setStyleSheet("""
+            background-color: #6200EE;
+            color: white;
+            border-radius: 15px;
+            min-width: 30px;
+            max-width: 30px;
+            min-height: 30px;
+            max-height: 30px;
+            font-size: 20px;
+            qproperty-alignment: AlignCenter;
+        """)
+        
+        # Text label
+        add_text = QLabel("Add Item")
+        add_text.setStyleSheet("font-size: 16px; color: #888;")
+        
+        btn_layout.addWidget(plus_icon)
+        btn_layout.addWidget(add_text)
+        btn_layout.addStretch()
+        
+        add_btn.setLayout(btn_layout)
         layout.addWidget(add_btn)
-        layout.addWidget(self.blocked_list)
+
         self.stack.addWidget(blocked_page)
 
     def setup_notifications(self):
         sidebar = QWidget()
-        sidebar.setFixedWidth(300)
+        sidebar.setFixedWidth(280)
         layout = QVBoxLayout(sidebar)
         title = QLabel("Notifications")
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
@@ -297,10 +418,8 @@ class MainUI(QMainWindow):
         return card
 
     def update_charts(self):
-        # Create a line series for CPU usage
         usage_series = QLineSeries()
         usage_series.setName("CPU Usage")
-        # Optional: set a custom pen for a modern look
         pen = QPen(QColor(0, 170, 255))
         pen.setWidth(3)
         usage_series.setPen(pen)
@@ -320,34 +439,27 @@ class MainUI(QMainWindow):
                 timestamp_dt = datetime.fromisoformat(ts)
             except Exception as e:
                 timestamp_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-            timestamp_ms = timestamp_dt.timestamp() * 1000  # QDateTimeAxis expects milliseconds
+            timestamp_ms = timestamp_dt.timestamp() * 1000
             usage_series.append(timestamp_ms, cpu_usage)
         
         conn.close()
         
-        # Use the system's internal time for screen time.
-        total_duration = time.time() - self.start_time  # self.start_time should be set when the monitor starts
+        total_duration = time.time() - self.start_time
         hours = int(total_duration // 3600)
         minutes = int((total_duration % 3600) // 60)
         self.screen_time_card.layout().itemAt(1).widget().setText(f"{hours}h {minutes}m")
         
-        # Create and configure the chart
         timeline_chart = QChart()
         timeline_chart.addSeries(usage_series)
         timeline_chart.setTitle("Activity Timeline")
         timeline_chart.setAnimationOptions(QChart.AnimationOption.SeriesAnimations)
-        
-        # Set dark background for the entire chart
         timeline_chart.setBackgroundBrush(QBrush(QColor(30, 30, 30)))
-        # Set a darker plot area background for contrast and enable background visibility
         timeline_chart.setPlotAreaBackgroundBrush(QBrush(QColor(40, 40, 40)))
         timeline_chart.setPlotAreaBackgroundVisible(True)
         
-        # Configure the X-axis as a date/time axis.
         axis_x = QDateTimeAxis()
         axis_x.setFormat("hh:mm")
         axis_x.setTitleText("Time")
-        # Set axis label and line colors to white for contrast
         axis_x.setLabelsColor(QColor("white"))
         axis_x.setTitleBrush(QBrush(QColor("white")))
         axis_x.setLinePenColor(QColor("white"))
@@ -355,7 +467,6 @@ class MainUI(QMainWindow):
         
         timeline_chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
         
-        # Configure the Y-axis as a value axis.
         axis_y = QValueAxis()
         axis_y.setTitleText("CPU Usage (%)")
         axis_y.setLabelsColor(QColor("white"))
@@ -376,8 +487,6 @@ class MainUI(QMainWindow):
             }
         """)
         self.timeline_chart.setChart(timeline_chart)
-        
-        
 
     def load_initial_data(self):
         self.load_blocked_items()
@@ -385,8 +494,7 @@ class MainUI(QMainWindow):
         self.update_charts()
 
     def load_blocked_items(self):
-        """Load items into the UI list"""
-        if hasattr(self, 'blocked_list'):  # Safety check
+        if hasattr(self, 'blocked_list'):
             self.blocked_list.clear()
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
@@ -395,29 +503,32 @@ class MainUI(QMainWindow):
             conn.close()
             self.blocked_card.layout().itemAt(1).widget().setText(str(self.blocked_list.count()))
     
-    def load_history_data(self):
-        """
-        Clear the scroll area and load all records from the output.sqlite database.
-        Each record is shown as a custom widget with a maximum height.
-        """
+    def load_history_data(self, filter_type=None):
         while self.history_scroll_layout.count():
             child = self.history_scroll_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
         conn = sqlite3.connect(OUTPUT_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT description, model_output, timestamp FROM output_summary")
+        
+        query = "SELECT description, model_output, timestamp FROM output_summary"
+        if filter_type == "safe":
+            query += " WHERE model_output = 'True'"
+        elif filter_type == "unsafe":
+            query += " WHERE model_output = 'False'"
+            
+        cursor.execute(query)
         rows = cursor.fetchall()
         conn.close()
+        
         for description, model_output, timestamp in rows:
             widget = QWidget()
-            widget.setMaximumHeight(150)  # Limit the widget height.
+            widget.setMaximumHeight(150)
             widget.setMaximumWidth(750)
             widget_layout = QVBoxLayout(widget)
             widget_layout.setContentsMargins(15, 5, 15, 5)
-            widget_layout.setSpacing(2)  # Add spacing between elements.
+            widget_layout.setSpacing(2)
 
-            # Use a different background color based on model_output.
             widget.setStyleSheet(f"""
                 QWidget {{
                     border-radius: 12px;
@@ -427,31 +538,28 @@ class MainUI(QMainWindow):
                 }}
             """)
 
-            # Description in bold with word wrap enabled.
             description_label = QLabel(description)
             description_label.setStyleSheet("font-weight: bold; font-size: 16px;")
             description_label.setWordWrap(True)
-            description_label.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred))
             widget_layout.addWidget(description_label)
 
-            # Timestamp in a smaller, lighter font with word wrap enabled.
             timestamp_label = QLabel(timestamp)
             timestamp_label.setStyleSheet("font-size: 12px; color: #cccccc;")
             timestamp_label.setWordWrap(True)
-            timestamp_label.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred))
             widget_layout.addWidget(timestamp_label)
 
-            # Model Output displayed as "SAFE" or "UNSAFE".
-            status_text = "SAFE" if model_output.lower() == "true" else "UNSAFE" 
+            status_text = "SAFE" if model_output.lower() == "true" else "UNSAFE"
             status_label = QLabel(status_text)
             status_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-            status_label.setWordWrap(True)
             status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             widget_layout.addWidget(status_label)
 
-            # Add the custom widget to the scrollable layout.
             self.history_scroll_layout.addWidget(widget)
 
+    def apply_history_filter(self, filter_type):
+        self.safe_filter.setChecked(filter_type == "safe")
+        self.unsafe_filter.setChecked(filter_type == "unsafe")
+        self.load_history_data(filter_type)
 
     def log_app_usage(self, app_name, duration=None):
         data = {"title": app_name}
@@ -460,7 +568,7 @@ class MainUI(QMainWindow):
         self.log_software_activity("AppInFocus" if duration else "AppOpen", data)
 
     def log_pc_usage(self, cpu_util, mem_util):
-        self.log_software_activity("PCUsage", {
+        self.log_software_activity("PC Usage", {
             "cpu_utilization": cpu_util,
             "memory_utilization": mem_util
         })
@@ -527,11 +635,9 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
-        print(model.IntrusionDetector.test(model.IntrusionDetector))
         if(model.IntrusionDetector.test(model.IntrusionDetector)):
             return True
         else:
-            # insert popup ?
             print("Ollama ka RAG nahi use kar rahe")
         totp = pyotp.TOTP(self.auth_key)
         otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)
