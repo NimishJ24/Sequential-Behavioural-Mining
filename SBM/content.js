@@ -1,5 +1,5 @@
 function sendToFlaskServer(data) {
-    fetch("http://localhost:5001/log_activity", {
+    fetch("http://localhost:5000/log_activity", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

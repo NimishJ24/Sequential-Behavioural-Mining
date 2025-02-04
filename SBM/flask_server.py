@@ -4,11 +4,14 @@ import sqlite3
 import logging
 import os
 
+DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "web_activity.sqlite")
+print(DB_PATH)
+
 app = Flask(__name__)
 
-CORS(app, origins=["chrome-extension://npeohpiflbiadiakpjpiejfnkpagibda"])
+CORS(app, origins=["chrome-extension://fgiajiopnnaiglhakioljbohcemblmop"])
 
-DB_PATH = "/home/chandan/sbm_data/tab_activity.sqlite"
+
 
 logging.basicConfig(filename='flask_server.log', level=logging.DEBUG)
 
