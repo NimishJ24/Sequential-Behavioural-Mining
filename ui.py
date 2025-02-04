@@ -503,8 +503,8 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
-        print(model.IDS.test())
-        if(model.IDS.test()):
+        print(model.IDS.test(model.IDS))
+        if(model.IDS.test(model.IDS)):
             return True
         totp = pyotp.TOTP(self.auth_key)
         otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)

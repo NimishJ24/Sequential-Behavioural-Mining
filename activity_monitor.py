@@ -425,8 +425,37 @@ class ActivityMonitor(QThread):
         removes any records that have NULL for critical fields or duplicate events, 
         and then prepares a summary (action + timestamp) for sending to an Ollama model.
         """
+        one_minute_ago = datetime.now() - timedelta(minutes=1)
+        one_minute_ago_str = one_minute_ago.strftime("%Y-%m-%d %H:%M:%S")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        conn = sqlite3.connect(ACTIVITY_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT type, title, timestamp FROM software WHERE timestamp >= ? AND timestamp <= ?",
+                        (one_minute_ago_str, now_str))
+        rows = cursor.fetchall()
+        conn.close()
+
+        # Filter out rows where the event type is NULL.
+        filtered = [row for row in rows if row[0] is not None]
+
+        # Deduplicate repeated events (a simple approach: remove consecutive events that have the same type and title)
+        deduped = []
+        prev = None
+        for row in filtered:
+            if prev is None or (row[0], row[1]) != (prev[0], prev[1]):
+                deduped.append(row)
+                prev = row
+
+        # Prepare the summary text. (This string would be sent to your Ollama model.)
+        summary_lines = [f"{event_type} at {timestamp}" for event_type, title, timestamp in deduped]
+        summary_text = "\n".join(summary_lines)
         
+        # For this example, we just log the summary.
+        self.log_signal.emit(f"Summary for past minute:\n{summary_text}")
+        result = self.call_ollama_model(summary_text, model.IDS.test(model.IDS))
+        print(result)
+        self.log_signal.emit(f"Ollama summary: {result}")
     
     def periodic_maintenance(self):
         """
