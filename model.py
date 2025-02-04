@@ -60,15 +60,17 @@ class IDS:
         return self._extract_data_by_interval("App in Focus", ["duration", "timestamp"])
 
     def _extract_data_by_interval(self, data_type, columns):
-        # Open the training database and fetch the first and last timestamps
+        """
+        Extract data from the database grouped into 30-second intervals.
+        Ensures there are entries for all intervals, even if they are empty.
+        """
+        # Open the training database
         DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_training.sqlite")
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Get the first and last timestamps
-        cursor.execute(f"""
-            SELECT MIN(timestamp), MAX(timestamp) FROM SOFTWARE WHERE TYPE = ?;
-        """, (data_type,))
+        # Get the first and last timestamps for the entire database
+        cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM SOFTWARE")
         first_timestamp, last_timestamp = cursor.fetchone()
 
         if not first_timestamp or not last_timestamp:
@@ -92,6 +94,7 @@ class IDS:
                 WHERE TYPE = ? AND timestamp >= ? AND timestamp < ?;
             """, (data_type, current_time.strftime("%Y-%m-%d %H:%M:%S"), next_time.strftime("%Y-%m-%d %H:%M:%S")))
             
+            # Store interval data (empty or populated)
             interval_data = cursor.fetchall()
             results.append(interval_data)
 
@@ -100,6 +103,7 @@ class IDS:
 
         conn.close()
         return results
+
     
     def train(self):
         # Extract the data for training
