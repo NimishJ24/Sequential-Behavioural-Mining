@@ -17,6 +17,7 @@ import model
 # Database: soft_activity.sqlite in the user's Documents folder
 ACTIVITY_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
 TRAINING_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_training.sqlite")
+OUTPUT_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "output.sqlite")
 
 def create_activity_table():
     conn = sqlite3.connect(ACTIVITY_DB_PATH)
@@ -72,8 +73,23 @@ def create_training_table():
     conn.commit()
     conn.close()
 
+def create_output_table():
+    conn = sqlite3.connect(OUTPUT_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS output_summary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT,
+            model_output TEXT,
+            timestamp TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
 create_activity_table()
 create_training_table()
+create_output_table()
 
 class ActivityMonitor(QThread):
     log_signal = pyqtSignal(str)
@@ -453,7 +469,9 @@ class ActivityMonitor(QThread):
         
         # For this example, we just log the summary.
         self.log_signal.emit(f"Summary for past minute:\n{summary_text}")
-        result = self.call_ollama_model(summary_text, model.IDS.test(model.IDS))
+        model_result = model.IDS.test(model.IDS)
+        result = self.call_ollama_model(summary_text, model_result)
+        
         print(result)
         self.log_signal.emit(f"Ollama summary: {result}")
     
