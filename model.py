@@ -41,7 +41,7 @@ class IntrusionDetector:
         # Keyboard Features
         if not self.keyboard_events:
             print("No keyboard events to process.")
-            keyboard_features = [[]]  # Replace with empty list in correct format
+            keyboard_features = [0] * 5
         else:
             try:
                 typing_speed = len(self.keyboard_events) / duration if duration > 0 else 0
@@ -78,22 +78,33 @@ class IntrusionDetector:
         # Mouse Features
         if not self.mouse_events:
             print("No mouse events to process.")
-            mouse_features = [[]]
+            mouse_features = [0] * 4
         else:
             try:
                 click_distances, mouse_speeds, click_times, mouse_positions = [], [], [], []
                 double_clicks = 0
 
-                for i, event in enumerate(self.mouse_events):
+                
+                for i in range(len(self.mouse_events)):
+                    click_type, click_interval, position_str, timestamp_str = self.mouse_events[i]
+                    
+                    # Keep track of all intervals for averaging
+                    mouse_intervals = []
+                    if click_interval > 0:  # Only add valid intervals
+                        mouse_intervals.append(click_interval)
+
                     try:
-                        position = ast.literal_eval(event[2])
+                        position = ast.literal_eval(position_str)
                         x, y = position
 
                         if i > 0:
-                            prev_position = ast.literal_eval(self.mouse_events[i - 1][2])
-                            distance = ((x - prev_position[0]) ** 2 + (y - prev_position[1]) ** 2) ** 0.5
+                            prev_position_str = self.mouse_events[i - 1][2]
+                            prev_position = ast.literal_eval(prev_position_str)
+                            x1, y1 = prev_position
+                            distance = ((x - x1)**2 + (y - y1)**2)**0.5
                             click_distances.append(distance)
-                            mouse_speeds.append(distance / event[1] if event[1] > 0 else 0)
+
+                        mouse_speeds.append(distance / click_interval if click_interval > 0 and i > 0 else 0)
 
                         click_times.append(time.time())
                         if i > 0 and click_times[i] - click_times[i - 1] < 0.5:
@@ -108,20 +119,29 @@ class IntrusionDetector:
                                 mouse_speeds.append(dx / time_diff)
 
                     except (SyntaxError, ValueError) as e:
-                        print(f"Error processing mouse event {i+1}: {e}")
+                        print(f"Error processing mouse data point {i+1}: {e}")
+                        mouse_features = [0] * 4
+                        break
 
                 avg_click_distance = sum(click_distances) / len(click_distances) if click_distances else 0
                 avg_mouse_speed = np.mean(mouse_speeds) if mouse_speeds else 0
+                avg_mouse_interval = sum(mouse_intervals) / len(mouse_intervals) if mouse_intervals else 0
 
-                mouse_features = [avg_click_distance, avg_mouse_speed, double_clicks]
+                print(f"Average Click Distance: {avg_click_distance}")
+                print(f"Average Mouse Speed: {avg_mouse_speed}")
+                print(f"Double Clicks: {double_clicks}")
+                print(f"Average Mouse Interval: {avg_mouse_interval}")
+
+                mouse_features = [avg_click_distance, avg_mouse_speed, double_clicks, avg_mouse_interval]
+                
             except Exception as e:
-                print(f"Error processing mouse data: {e}")
-                mouse_features = [[]]
+                print(f"Error processing mouse data point {e}")
+                mouse_features = [0] * 4
 
         # Focus Features
         if not self.focus_events:
             print("No focus events to process.")
-            focus_features = [[]]
+            focus_features  = [0] * 3
         else:
             try:
                 durations = []
