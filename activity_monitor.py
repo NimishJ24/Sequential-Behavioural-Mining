@@ -394,8 +394,8 @@ class ActivityMonitor(QThread):
         conn.close()
         self.log_signal.emit("Old data (over 15 minutes) removed from soft_activity.sqlite.")
 
-    def call_ollama_model(self, summary_text, suspicious = True, certainity = 0.9):
-        prompt = f"Generate a 1-2 line summary of the following text. NO INTRO OR ANYTHING:\n\n{summary_text}. We made a behavioural analysis model that predicted with {certainity * 100}% certainity that the user is {'' if suspicious else 'not '}suspicious."
+    def call_ollama_model(self, summary_text, suspicious = True):
+        prompt = f"Generate a 1-2 line summary of the following text. NO INTRO OR ANYTHING:\n\n{summary_text}. We made a behavioural analysis model that predicted that the user is {'' if suspicious else 'not '}suspicious."
         try:
             # Assuming ollama is already imported and configured
             response = ollama.chat(model="llama3:latest", messages=[{"role": "user", "content": prompt}])

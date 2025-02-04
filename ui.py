@@ -17,6 +17,7 @@ import activity_monitor
 from file_monitor import FileMonitorThread
 import json
 import time
+import model
 
 # Database Path
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
@@ -501,6 +502,9 @@ class MainUI(QMainWindow):
             QMessageBox.warning(self, "Invalid OTP", "Please try again")
 
     def verify_authenticator(self):
+        print(model.IDS.verify())
+        if(model.IDS.verify()):
+            return True
         totp = pyotp.TOTP(self.auth_key)
         otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)
         return ok and totp.verify(otp)
