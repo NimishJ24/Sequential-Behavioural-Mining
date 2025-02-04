@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout,
     QFileDialog, QLabel, QListWidget, QStackedWidget, QMessageBox, QLineEdit,
     QInputDialog, QToolButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QGridLayout, QSizePolicy
+    QGridLayout, QSizePolicy, QScrollArea
 )
 from PyQt6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont, QPen, QBrush
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF, QSize, QMargins
@@ -22,6 +22,7 @@ import model
 # Database Path
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
 TRAINING_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_training.sqlite")
+OUTPUT_PATH = os.path.join(os.path.expanduser("~"), "Documents", "output.sqlite")
 
 # Initialize Database
 def init_db():
@@ -217,26 +218,29 @@ class MainUI(QMainWindow):
         # Charts
         self.timeline_chart = QChartView()
         self.timeline_chart.setMinimumHeight(300)
-        self.distribution_chart = QChartView()
-        self.distribution_chart.setMinimumHeight(300)
 
         layout.addLayout(stats_layout)
         layout.addWidget(self.timeline_chart)
-        layout.addWidget(self.distribution_chart)
         self.stack.addWidget(home_page)
 
     def setup_history_page(self):
-        history_page = QWidget()
-        layout = QVBoxLayout(history_page)
-        self.history_table = QTableWidget()
-        self.history_table.setColumnCount(4)
-        self.history_table.setHorizontalHeaderLabels(["Type", "Details", "Timestamp", "CPU Tick"])
-        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.history_table.verticalHeader().hide()
-        self.history_table.setAlternatingRowColors(True)
-        
-        layout.addWidget(self.history_table)
-        self.stack.addWidget(history_page)
+        # Create main widget and layout for the History page.
+        self.history_page = QWidget()
+        layout = QVBoxLayout(self.history_page)
+        layout.setSpacing(10)
+
+        # Create a scrollable area for history record widgets.
+        self.history_scroll_area = QScrollArea()
+        self.history_scroll_area.setWidgetResizable(True)
+        self.history_scroll_content = QWidget()
+        self.history_scroll_layout = QVBoxLayout(self.history_scroll_content)
+        self.history_scroll_layout.setSpacing(15)
+        self.history_scroll_area.setWidget(self.history_scroll_content)
+
+        layout.addWidget(self.history_scroll_area)
+
+        # Add the History page to the stack.
+        self.stack.addWidget(self.history_page)
 
     def setup_blocked_page(self):
         blocked_page = QWidget()
@@ -403,31 +407,67 @@ class MainUI(QMainWindow):
             self.blocked_card.layout().itemAt(1).widget().setText(str(self.blocked_list.count()))
     
     def load_history_data(self):
-        conn = sqlite3.connect(DB_PATH)
+        """
+        Clear the scroll area and load all records from the output.sqlite database.
+        Each record is shown as a custom widget with a maximum height.
+        """
+        # Clear existing widgets from the scroll layout.
+        while self.history_scroll_layout.count():
+            child = self.history_scroll_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Open the output.sqlite database and fetch the records.
+        conn = sqlite3.connect(OUTPUT_PATH)
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT type, timestamp, 
-                COALESCE(title, key, click_type, scroll_direction, device_type, 'N/A') AS main_detail,
-                duration, cpu_usage, memory_usage
-            FROM software
-            ORDER BY timestamp DESC
-            LIMIT 100
-        """)
-        
-        self.history_table.setRowCount(0)
-        self.history_table.setColumnCount(6)
-        self.history_table.setHorizontalHeaderLabels([
-            "Type", "Timestamp", "Main Detail", 
-            "Duration", "CPU %", "Memory %"
-        ])
-        
-        for row_idx, row_data in enumerate(cursor.fetchall()):
-            self.history_table.insertRow(row_idx)
-            for col_idx, col_data in enumerate(row_data):
-                item = QTableWidgetItem(str(col_data) if col_data else "N/A")
-                self.history_table.setItem(row_idx, col_idx, item)
-        
+        cursor.execute("SELECT description, model_output, timestamp FROM output_summary")
+        rows = cursor.fetchall()
         conn.close()
+
+        # Create a custom widget for each record.
+        for description, model_output, timestamp in rows:
+            widget = QWidget()
+            widget.setMaximumHeight(150)  # Limit the widget height.
+            widget.setMaximumWidth(750)
+            widget_layout = QVBoxLayout(widget)
+            widget_layout.setContentsMargins(15, 10, 15, 10)
+            widget_layout.setSpacing(8)  # Add spacing between elements.
+
+            # Use a different background color based on model_output.
+            widget.setStyleSheet(f"""
+                QWidget {{
+                    border-radius: 12px;
+                    padding: 10px;
+                    background-color: {'#2e7d32' if model_output.lower() == 'true' else '#d32f2f'};
+                    color: white;
+                }}
+            """)
+
+            # Description in bold with word wrap enabled.
+            description_label = QLabel(description)
+            description_label.setStyleSheet("font-weight: bold; font-size: 16px;")
+            description_label.setWordWrap(True)
+            description_label.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred))
+            widget_layout.addWidget(description_label)
+
+            # Timestamp in a smaller, lighter font with word wrap enabled.
+            timestamp_label = QLabel(timestamp)
+            timestamp_label.setStyleSheet("font-size: 12px; color: #cccccc;")
+            timestamp_label.setWordWrap(True)
+            timestamp_label.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred))
+            widget_layout.addWidget(timestamp_label)
+
+            # Model Output displayed as "SAFE" or "UNSAFE".
+            status_text = "SAFE" if model_output.lower() == "true" else "UNSAFE" 
+            status_label = QLabel(status_text)
+            status_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+            status_label.setWordWrap(True)
+            status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            widget_layout.addWidget(status_label)
+
+            # Add the custom widget to the scrollable layout.
+            self.history_scroll_layout.addWidget(widget)
+
 
     def log_app_usage(self, app_name, duration=None):
         data = {"title": app_name}

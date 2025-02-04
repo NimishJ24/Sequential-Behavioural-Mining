@@ -25,7 +25,7 @@ class IDS:
 
         # ACHINTYA TERRITORY INFERENCE
 
-        n = random.randint(0,100)
+        n = random.randint(0,1)
         
         return n
     

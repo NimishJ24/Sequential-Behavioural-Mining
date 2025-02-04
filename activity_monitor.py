@@ -348,7 +348,7 @@ class ActivityMonitor(QThread):
             return
 
         # Open the source database and get the first record's timestamp.
-        time.sleep(600)
+        time.sleep(6)
         conn_source = sqlite3.connect(ACTIVITY_DB_PATH)
         cursor_source = conn_source.cursor()
         cursor_source.execute("SELECT timestamp FROM software ORDER BY timestamp ASC LIMIT 1")
@@ -413,15 +413,9 @@ class ActivityMonitor(QThread):
         self.log_signal.emit("Old data (over 15 minutes) removed from soft_activity.sqlite.")
 
     def call_ollama_model(self, summary_text, suspicious = True):
-        prompt = f"Generate a 1-2 line summary of the following text. NO INTRO OR ANYTHING:\n\n{summary_text}. We made a behavioural analysis model that predicted that the user is {'' if suspicious else 'not '}suspicious."
+        prompt = f"Generate a 1-2 line summary of the following text. NO INTRO OR ANYTHING JUST RETURN THE SUMMARY:\n\n{summary_text}. We made a behavioural analysis model that predicted that the user is {'' if not suspicious else 'not '}suspicious. NO OTHER TEXT. DON'T MENTION TIME OR DATE. ONLY SUMMARIZE THE ACTIONS AND TRY TO PREDICT WHAT THE USER MAY BE TRYING TO DO"
         try:
-            # Assuming ollama is already imported and configured
             response = ollama.chat(model="llama3:latest", messages=[{"role": "user", "content": prompt}])
-            
-            # Debugging: Print the full response to inspect its structure
-            # print("Ollama API Response:", response)
-            
-            # Ensure the response structure is as expected
             if 'message' in response and 'content' in response['message']:
                 result = response['message']['content']
                 return result
@@ -468,11 +462,21 @@ class ActivityMonitor(QThread):
         summary_text = "\n".join(summary_lines)
         
         # For this example, we just log the summary.
-        self.log_signal.emit(f"Summary for past minute:\n{summary_text}")
-        model_result = model.IDS.test(model.IDS)
+        model_result = bool(model.IDS.test(model.IDS))
         result = self.call_ollama_model(summary_text, model_result)
+        output_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(result + " \n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
+        # Insert the result into the output_summary table in output.sqlite
+        conn_output = sqlite3.connect(OUTPUT_DB_PATH)
+        cursor_output = conn_output.cursor()
+        cursor_output.execute("""
+            INSERT INTO output_summary (description, model_output, timestamp)
+            VALUES (?, ?, ?)
+        """, (result, str(model_result), output_timestamp))
+        conn_output.commit()
+        conn_output.close()
         
-        print(result)
+        print(result + "\n\n ADDED TO TABLE")
         self.log_signal.emit(f"Ollama summary: {result}")
     
     def periodic_maintenance(self):
