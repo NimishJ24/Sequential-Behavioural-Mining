@@ -15,6 +15,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QRectF, QSize
 from PyQt6.QtCharts import QChart, QChartView, QPieSeries, QLineSeries, QDateTimeAxis, QValueAxis
 import activity_monitor
 from file_monitor import FileMonitorThread
+import json
 
 # Database Path
 DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "activity.sqlite")
@@ -27,12 +28,19 @@ def init_db():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT
                     )""")
-    cursor.execute("""CREATE TABLE IF NOT EXISTS activity (
+    cursor.execute("""CREATE TABLE IF NOT EXISTS Software (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        type TEXT,
-                        details TEXT,
-                        timestamp DATETIME,
-                        cpu_tick REAL
+                        Type TEXT NOT NULL,
+                        Keyboard TEXT,
+                        Click TEXT,
+                        Scroll TEXT,
+                        AppOpen TEXT,
+                        AppClosed TEXT,
+                        AppInFocus TEXT,
+                        AllAppsOpen TEXT,
+                        PCUsage TEXT,
+                        ExternalPeripherals TEXT,
+                        Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                     )""")
     conn.commit()
     conn.close()
@@ -273,6 +281,23 @@ class MainUI(QMainWindow):
 
     def update_charts(self):
         # Timeline Chart
+        usage_series = QLineSeries()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("""SELECT Timestamp, PCUsage 
+                        FROM Software 
+                        WHERE Type = 'PCUsage'
+                        ORDER BY Timestamp""")
+        
+        for ts, pc_usage in cursor.fetchall():
+            usage_data = json.loads(pc_usage)
+            timestamp = datetime.fromisoformat(ts)
+            usage_series.append(
+                timestamp.timestamp() * 1000, 
+                usage_data.get('cpu_utilization', 0)
+            )
+        
         timeline_series = QLineSeries()
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -344,14 +369,45 @@ class MainUI(QMainWindow):
     def load_history_data(self):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT type, details, timestamp, cpu_tick FROM activity ORDER BY timestamp DESC")
-        rows = cursor.fetchall()
-        self.history_table.setRowCount(len(rows))
+        cursor.execute("""SELECT Type, Timestamp, 
+                        CASE 
+                            WHEN Type = 'Keyboard' THEN Keyboard
+                            WHEN Type = 'Click' THEN Click
+                            WHEN Type = 'PCUsage' THEN PCUsage
+                            ELSE ''
+                        END AS Details
+                        FROM Software
+                        ORDER BY Timestamp DESC""")
         
-        for row_idx, row in enumerate(rows):
-            for col_idx, item in enumerate(row):
-                self.history_table.setItem(row_idx, col_idx, QTableWidgetItem(str(item)))
+        self.history_table.setRowCount(0)
+        
+        for row_idx, (act_type, timestamp, details) in enumerate(cursor.fetchall()):
+            self.history_table.insertRow(row_idx)
+            self.history_table.setItem(row_idx, 0, QTableWidgetItem(act_type))
+            self.history_table.setItem(row_idx, 1, QTableWidgetItem(timestamp))
+            
+            # Format details based on type
+            try:
+                detail_data = json.loads(details)
+                formatted = "\n".join([f"{k}: {v}" for k,v in detail_data.items()])
+            except:
+                formatted = details
+                
+            self.history_table.setItem(row_idx, 2, QTableWidgetItem(formatted))
+        
         conn.close()
+
+    def log_app_usage(self, app_name, duration=None):
+        data = {"title": app_name}
+        if duration:
+            data["duration"] = duration
+        self.log_software_activity("AppInFocus" if duration else "AppOpen", data)
+
+    def log_pc_usage(self, cpu_util, mem_util):
+        self.log_software_activity("PCUsage", {
+            "cpu_utilization": cpu_util,
+            "memory_utilization": mem_util
+        })
 
     def change_page(self):
         btn = self.sender()
