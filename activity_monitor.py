@@ -331,6 +331,7 @@ class ActivityMonitor(QThread):
             return
 
         # Open the source database and get the first record's timestamp.
+        time.sleep(600)
         conn_source = sqlite3.connect(ACTIVITY_DB_PATH)
         cursor_source = conn_source.cursor()
         cursor_source.execute("SELECT timestamp FROM software ORDER BY timestamp ASC LIMIT 1")
