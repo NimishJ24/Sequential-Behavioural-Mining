@@ -2,6 +2,8 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 
+ACTIVITY_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
+
 def get_time_window():
     """
     Returns the current time and the time 30 seconds ago in the correct string format
@@ -17,16 +19,17 @@ def extract_key_inference():
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT key, key_interval, timestamp 
+        SELECT key, key_interval, timestamp
         FROM SOFTWARE 
-        WHERE TYPE = "Keyboard"
-        AND timestamp BETWEEN ? AND ?;
+        WHERE TYPE = "Keyboard" AND timestamp BETWEEN ? AND ?;
     """, (start_time, end_time))
     
     result = cursor.fetchall()
     conn.close()
     # print(result)
     return result
+
+# extract_key_inference()
 
 def extract_mouse_inference():
     start_time, end_time = get_time_window()
@@ -46,7 +49,7 @@ def extract_mouse_inference():
     # print(result)
     return result
 
-ACTIVITY_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "soft_activity.sqlite")
+
 
 def create_activity_table():
     conn = sqlite3.connect(ACTIVITY_DB_PATH)
@@ -82,7 +85,7 @@ def extract_focus_inference():
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT duration, timestamp 
+        SELECT title, duration, timestamp 
         FROM SOFTWARE 
         WHERE TYPE = "App in Focus"
         AND timestamp BETWEEN ? AND ?;
