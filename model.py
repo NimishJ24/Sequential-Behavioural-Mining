@@ -43,7 +43,7 @@ class IntrusionDetector:
             pass
         
         print("-"*15)
-        print(self.keyboard_events)
+        # print(self.keyboard_events)
 
         # Keyboard Features
         if not self.keyboard_events:
@@ -82,7 +82,7 @@ class IntrusionDetector:
 
             average_difference = sum(time_differences) / len(time_differences) if time_differences else 0
 
-            print(f"Typing speed: {typing_speed}")
+            print(f"Typing rate: {typing_speed * 30}")
             print(f"Error rate: {backspace}")
             print(f"Special keys rate: {shortcuts}")
             print(f"Average Dwell Time: {dwell_time}")

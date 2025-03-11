@@ -515,8 +515,9 @@ class ActivityMonitor(QThread):
         # Call the Ollama model to generate a 1-2 line summary.
         ollama_summary = self.call_ollama_model(summary_text, suspicious=suspicious)
         output_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(ollama_summary + "\n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
-        
+        # print(ollama_summary + "\n\n" + str(model_result) + "\n\n" + output_timestamp + "\n\n")
+        print("-----------------------------------------------")
+        print("Calculating for the next 30 seconds")
         # Insert the summary into the output SQLite database.
         OUTPUT_DB_PATH = os.path.join(os.path.expanduser("~"), "Documents", "output.sqlite")
         conn_output = sqlite3.connect(OUTPUT_DB_PATH)
@@ -528,7 +529,7 @@ class ActivityMonitor(QThread):
         conn_output.commit()
         conn_output.close()
         
-        print(ollama_summary + "\n\n ADDED TO TABLE")
+        # print(ollama_summary + "\n\n ADDED TO TABLE")
         # Optionally, emit a signal or log the Ollama summary.
         self.log_signal.emit(f"Ollama summary: {ollama_summary}")
     
@@ -541,7 +542,7 @@ class ActivityMonitor(QThread):
     def periodic_summary_generation(self):
         while self.running:
             self.generate_summary_data()
-            time.sleep(120)
+            time.sleep(30)
 
     # ---------------- Stop the monitor ----------------
     def stop(self):

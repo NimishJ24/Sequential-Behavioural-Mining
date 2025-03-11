@@ -240,7 +240,6 @@ class MainUI(QMainWindow):
             btn.clicked.connect(self.change_page)
             nav_layout.addWidget(btn)
             self.nav_buttons[text] = btn
-
         nav_layout.addStretch()
         self.main_layout.addWidget(nav_widget)
 
@@ -640,8 +639,6 @@ class MainUI(QMainWindow):
         print(model_result)
         if(model_result):
             return True
-        else:
-            print("Ollama ka RAG nahi use kar rahe")
         totp = pyotp.TOTP(self.auth_key)
         otp, ok = QInputDialog.getText(self, "Authentication", "Enter OTP:", QLineEdit.EchoMode.Password)
         return ok and totp.verify(otp)
