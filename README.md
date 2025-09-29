@@ -21,7 +21,7 @@ Here are a few snapshots of the system in action, from backend model predictions
 | Normal vs. Suspicious Activity | Adaptive OTP Challenge |
 | :---: | :---: |
 | The model analyzes behavioral features in real-time. Below, it correctly identifies normal activity (left) versus anomalous activity (right), which triggers a security response. | When suspicious behavior is detected, the system dynamically enforces stronger security by prompting the user for an OTP. |
-| ![Model Prediction](assets/abnormal.jpg) | ![OTP Prompt](assets/norma.jpg) |
+| ![Model Prediction](assets/norma.jpg) ![Model Prediction](assets/abnormal.jpg) | ![OTP Prompt](assets/auth.jpg) |
 
 | Real-Time Monitoring Dashboard | Security Event History |
 | :---: | :---: |
