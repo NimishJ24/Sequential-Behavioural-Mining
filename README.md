@@ -21,12 +21,12 @@ Here are a few snapshots of the system in action, from backend model predictions
 | Normal vs. Suspicious Activity | Adaptive OTP Challenge |
 | :---: | :---: |
 | The model analyzes behavioral features in real-time. Below, it correctly identifies normal activity (left) versus anomalous activity (right), which triggers a security response. | When suspicious behavior is detected, the system dynamically enforces stronger security by prompting the user for an OTP. |
-| ![Model Prediction]() | ![OTP Prompt](https://i.imgur.com/u772OqY.png) |
+| ![Model Prediction](assets/abnormal.jpg) | ![OTP Prompt](assets/norma.jpg) |
 
 | Real-Time Monitoring Dashboard | Security Event History |
 | :---: | :---: |
 | The dashboard provides a live view of user and system metrics, such as CPU usage over time. | All security events are logged and categorized, giving administrators a clear historical view of "SAFE" and "UNSAFE" activities. |
-| ![Dashboard](https://i.imgur.com/w2YxJ0x.png) | ![History](https://i.imgur.com/Qk9hJ8p.png) |
+| ![Dashboard](assets/dashboard.jpg) | ![History](assets/check.jpg) |
 
 *(**Note**: I've uploaded your images to Imgur for easy embedding. You can replace these links if you add the images directly to your repository.)*
 
